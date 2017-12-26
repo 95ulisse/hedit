@@ -27,36 +27,25 @@ int main(int argc, char** argv) {
 
     // Initialize libtickit
     log_debug("Initializing libtickit.");
-    TickitTerm* term = tickit_term_new();
-    if (term == NULL) {
+    Tickit* tickit = tickit_new_stdio();
+    if (tickit == NULL) {
         log_fatal("Cannot initialize libtickit: %s.", strerror(errno));
         return 1;
     }
 
-    // Configure the tickit terminal
-    tickit_term_set_input_fd(term, STDIN_FILENO);
-    tickit_term_set_output_fd(term, STDOUT_FILENO);
-    tickit_term_await_started(term, &(const struct timeval){ .tv_sec = 0, .tv_usec = 50000 });
-    tickit_term_setctl_int(term, TICKIT_TERMCTL_ALTSCREEN, 1);
-    tickit_term_setctl_int(term, TICKIT_TERMCTL_KEYPAD_APP, 0);
-    tickit_term_setctl_int(term, TICKIT_TERMCTL_MOUSE, TICKIT_TERM_MOUSEMODE_OFF);
-    tickit_term_clear(term);
-
     // Initialize a new global state
-    HEdit* hedit = hedit_core_init(&options, term);
+    HEdit* hedit = hedit_core_init(&options, tickit_get_rootwin(tickit));
     if (hedit == NULL) {
         return 1;
     }
 
     // Main input loop
-    while (!hedit->exit) {
-        tickit_term_input_wait(term, NULL);
-    }
+    tickit_run(tickit);
 
     // Tear down everything
     int exitcode = hedit->exitcode;
     hedit_core_teardown(hedit);
-    tickit_term_destroy(term);
+    tickit_unref(tickit);
     log_teardown();
     return exitcode;
 

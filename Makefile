@@ -5,7 +5,7 @@ LIB = lib
 CC = gcc
 CFLAGS += -std=c99 -Wall -pedantic -D_POSIX_C_SOURCE=200809L
 INCLUDES = -I "$(SRC)" -I "$(SRC)/util" -I "$(LIB)/libtickit/include"
-LDFLAGS += -L "$(LIB)/libtickit/.libs" -l:libtickit.a
+LDFLAGS += -L "$(LIB)/libtickit/.libs" -l:libtickit.a -ltermkey -lunibilium
 DEBUGFLAGS = -g -DDEBUG
 
 OBJECTS = $(OUT)/util/map.o \

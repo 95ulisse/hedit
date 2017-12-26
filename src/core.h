@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <tickit.h>
 
+typedef struct HEdit HEdit;
+
 #include "options.h"
 #include "statusbar.h"
 
@@ -19,24 +21,21 @@
  * Contains eveything needed to describe the precise state of HEdit:
  * from the opened file, to the mode we are in, to the current statusbar text.
  */
-typedef struct {
+struct HEdit {
 
     // Components
     Options* options;
     Statusbar* statusbar;
 
     // UI
-    TickitTerm* term;
     TickitWindow* rootwin;
+    int on_keypress_bind_id;
 
     // Exit flag and exit code
     bool exit;
     int exitcode;
 
-    // Event registration ids
-    int on_resize_ev_id;
-
-} HEdit;
+};
 
 
 
@@ -46,7 +45,7 @@ typedef struct {
  * 
  * @return The newly created global state, or NULL in case of error.
  */
-HEdit* hedit_core_init(Options* options, TickitTerm* term);
+HEdit* hedit_core_init(Options* options, TickitWindow* rootwin);
 
 /**
  * Releases all the resources associated with the given state.

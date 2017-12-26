@@ -16,11 +16,4 @@ Statusbar* hedit_statusbar_init(HEdit* hedit);
  */
 void hedit_statusbar_teardown(Statusbar* statusbar);
 
-/**
- * Notifies the statusbar of the new dimensions of the terminal.
- * @param lines New number of lines available.
- * @param cols New number of columns available.
- */
-void hedit_statusbar_on_resize(Statusbar* statusbar, int lines, int cols);
-
 #endif
