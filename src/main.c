@@ -14,6 +14,11 @@ int main(int argc, char** argv) {
     // Init the logging framework as soon as possible
     log_init();
 
+    // Initialize modes and default keybindings
+    for (enum Modes m = HEDIT_MODE_NORMAL; m < HEDIT_MODE_MAX; m++) {
+        // ...
+    }
+
     // Parse the cli options
     Options options;
     if (!options_parse(&options, argc, argv)) {

@@ -16,14 +16,15 @@ struct Statusbar {
 
 static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
 
+    Statusbar* statusbar = user;
     TickitExposeEventInfo* e = info;
 
     // Clear
     tickit_renderbuffer_eraserect(e->rb, &e->rect);
 
     // Redraw the two lines of text
-    tickit_renderbuffer_text_at(e->rb, 0, 0, "Status line");
-    tickit_renderbuffer_text_at(e->rb, 1, 0, ":Command line");
+    tickit_renderbuffer_text_at(e->rb, 0, 0, statusbar->hedit->mode->name);
+    tickit_renderbuffer_text_at(e->rb, 1, 0, "");
 
     return 1;
 

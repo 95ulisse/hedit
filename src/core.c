@@ -1,16 +1,97 @@
 #include <stdlib.h>
+#include <assert.h>
 #include <tickit.h>
 
 #include "core.h"
 #include "log.h"
 #include "options.h"
 #include "statusbar.h"
+#include "util/map.h"
+
+
+static void mode_normal_on_enter(HEdit* hedit, Mode* prev) {
+    log_debug("Entering NORMAL mode.");
+}
+
+static void mode_normal_on_exit(HEdit* hedit, Mode* next) {
+    log_debug("Leaving NORMAL mode.");
+}
+
+static void mode_normal_on_input(HEdit* hedit, const char* key) {
+    log_debug("NORMAL input: %s", key);
+}
+
+static void mode_overwrite_on_enter(HEdit* hedit, Mode* prev) {
+    log_debug("Entering OVERWRITE mode.");
+}
+
+static void mode_overwrite_on_exit(HEdit* hedit, Mode* next) {
+    log_debug("Leaving OVERWRITE mode.");
+}
+
+static void mode_overwrite_on_input(HEdit* hedit, const char* key) {
+    log_debug("OVERWRITE input: %s", key);
+}
+
+static Mode hedit_modes[] = {
+    
+    [HEDIT_MODE_NORMAL] = {
+        .id = HEDIT_MODE_NORMAL,
+        .name = "Normal",
+        .bindings = NULL,
+        .on_enter = mode_normal_on_enter,
+        .on_exit = mode_normal_on_exit,
+        .on_input = mode_normal_on_input
+    },
+
+    [HEDIT_MODE_OVERWRITE] = {
+        .id = HEDIT_MODE_OVERWRITE,
+        .name = "Overwrite",
+        .bindings = NULL,
+        .on_enter = mode_overwrite_on_enter,
+        .on_exit = mode_overwrite_on_exit,
+        .on_input = mode_overwrite_on_input
+    }
+
+};
+
+void hedit_switch_mode(HEdit* hedit, enum Modes m) {
+    assert(m >= HEDIT_MODE_NORMAL && m <= HEDIT_MODE_MAX);
+
+    Mode* old = hedit->mode;
+    Mode* new = &hedit_modes[m];
+
+    if (old == new) {
+        return;
+    }
+
+    // Perform the switch and invoke the enter/exit events
+    if (old != NULL && old->on_exit != NULL) {
+        old->on_exit(hedit, new);
+    }
+    hedit->mode = new;
+    if (new->on_enter != NULL) {
+        new->on_enter(hedit, old == NULL ? new : old);
+    }
+}
+
+
+// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
+
 
 static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
 
+    HEdit* hedit = user;
     TickitKeyEventInfo* e = info;
 
-    log_info(e->str);
+    if (strcmp("Escape", e->str) == 0) {
+        hedit_switch_mode(hedit, HEDIT_MODE_NORMAL);
+    } else if (strcmp("i", e->str) == 0) {
+        hedit_switch_mode(hedit, HEDIT_MODE_OVERWRITE);
+    } else {
+        hedit->mode->on_input(hedit, e->str);
+    }
 
     return 1;
 
@@ -35,6 +116,9 @@ HEdit* hedit_core_init(Options* options, TickitWindow* rootwin) {
     if ((hedit->statusbar = hedit_statusbar_init(hedit)) == NULL) {
         goto error;
     }
+
+    // Switch to normal mode
+    hedit_switch_mode(hedit, HEDIT_MODE_NORMAL);
 
     // Exit with success
     return hedit;
