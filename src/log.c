@@ -7,6 +7,7 @@
 #include <assert.h>
 
 #include "log.h"
+#include "util/list.h"
 
 #define RESET "\x1b[0m"
 #define BOLD "\x1b[1m"
@@ -29,10 +30,9 @@ static const char* severity_text_colors[] = {
 // Log sinks are stored as a doubly-linked list
 struct log_sink_node {
     log_sink sink;
-    struct log_sink_node* prev;
-    struct log_sink_node* next;
+    struct list_head list;
 };
-static struct log_sink_node* sinks = NULL;
+static struct list_head sinks = LIST_HEAD_INIT(sinks);
 
 // Shared log configuration
 static struct log_config config = {
@@ -52,7 +52,7 @@ void log_init() {
     log_register_sink(destination_sink);
 
     // If we failed to register the default sink for any reason (out of memory), just abort
-    if (sinks == NULL) {
+    if (list_empty(&sinks)) {
         fprintf(config.destination, "Cannot initialize logging framework.\n");
         abort();
     }
@@ -61,8 +61,8 @@ void log_init() {
 void log_teardown() {
     
     // Free all the sinks
-    while (sinks != NULL) {
-        log_unregister_sink((void*) sinks);
+    list_for_each_member(sink, &sinks, struct log_sink_node, list) {
+        log_unregister_sink((void*) sink);
     }
 
     // Close log destination
@@ -101,20 +101,10 @@ void* log_register_sink(log_sink sink) {
         return NULL;
     }
     node->sink = sink;
-    node->prev = NULL;
-    node->next = NULL;
+    list_init(&node->list);
 
     // Append the sink at the end of the list
-    if (sinks == NULL) {
-        sinks = node;
-    } else {
-        struct log_sink_node* curr = sinks;
-        while (curr->next != NULL) {
-            curr = curr->next;
-        }
-        curr->next = node;
-        node->prev = curr;
-    }
+    list_add_tail(&sinks, &node->list);
 
     return (void*) node;
 
@@ -131,14 +121,8 @@ void log_unregister_sink(void* token) {
     }
 
     // Remove the node from the list
-    if (node->prev != NULL) {
-        node->prev->next = node->next;
-    } else {
-        sinks = node->next;
-    }
-    if (node->next != NULL) {
-        node->next->prev = node->prev;
-    }
+    list_del(&node->list);
+    free(node);
 
 }
 
@@ -172,16 +156,11 @@ void __hedit_log(const char* file, int line, log_severity severity, const char* 
     }
 
     // Iterate all the sinks and pass all the parameters
-    struct log_sink_node* sink = sinks;
-    while (sink != NULL) {
-        
+    list_for_each_member(sink, &sinks, struct log_sink_node, list) {
         va_list args;
         va_start(args, format);
         sink->sink(&config, file, line, severity, format, args);
         va_end(args);
-
-        sink = sink->next;
-
     }
 
 }
