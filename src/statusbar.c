@@ -7,11 +7,13 @@
 #include "log.h"
 #include "core.h"
 #include "statusbar.h"
+#include "util/event.h"
 
 struct Statusbar {
     HEdit* hedit;
     TickitWindow* win;
     int on_resize_bind_id;
+    void* on_mode_switch_registration;
 };
 
 static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
@@ -51,6 +53,13 @@ static int on_resize(TickitWindow* win, TickitEventFlags flags, void* info, void
     
 }
 
+static void on_mode_switch(void* user, HEdit* hedit, Mode* new, Mode* old) {
+    Statusbar* statusbar = user;
+
+    // Force a redraw of the statusbar window
+    tickit_window_expose(statusbar->win, NULL);
+}
+
 Statusbar* hedit_statusbar_init(HEdit* hedit) {
 
     // Allocate space
@@ -78,6 +87,7 @@ Statusbar* hedit_statusbar_init(HEdit* hedit) {
     // Register the event handlers
     tickit_window_bind_event(statusbar->win, TICKIT_WINDOW_ON_EXPOSE, 0, on_expose, statusbar);
     statusbar->on_resize_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_GEOMCHANGE, 0, on_resize, statusbar);
+    statusbar->on_mode_switch_registration = event_add(&hedit->ev_mode_switch, on_mode_switch, statusbar);
 
     return statusbar;
 }
@@ -90,6 +100,7 @@ void hedit_statusbar_teardown(Statusbar* statusbar) {
 
     // Detach handlers
     tickit_window_unbind_event_id(statusbar->hedit->rootwin, statusbar->on_resize_bind_id);
+    event_del(&statusbar->hedit->ev_mode_switch, statusbar->on_mode_switch_registration);
 
     // Destroy the window and free the memory
     tickit_window_close(statusbar->win);

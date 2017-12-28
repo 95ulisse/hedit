@@ -9,6 +9,7 @@ typedef struct HEdit HEdit;
 #include "options.h"
 #include "statusbar.h"
 #include "util/map.h"
+#include "util/event.h"
 
 
 
@@ -56,6 +57,9 @@ struct HEdit {
     // Components
     Mode* mode;
     Statusbar* statusbar;
+
+    // Events
+    Event ev_mode_switch;
 
     // UI
     TickitWindow* rootwin;

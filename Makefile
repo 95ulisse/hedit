@@ -9,6 +9,7 @@ LDFLAGS += -L "$(LIB)/libtickit/.libs" -l:libtickit.a -ltermkey -lunibilium
 DEBUGFLAGS = -g -DDEBUG
 
 OBJECTS = $(OUT)/util/map.o \
+		  $(OUT)/util/event.o \
           $(OUT)/log.o \
 		  $(OUT)/options.o \
 		  $(OUT)/statusbar.o \

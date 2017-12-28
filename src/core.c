@@ -73,6 +73,9 @@ void hedit_switch_mode(HEdit* hedit, enum Modes m) {
     if (new->on_enter != NULL) {
         new->on_enter(hedit, old == NULL ? new : old);
     }
+
+    // Fire the event
+    event_fire(&hedit->ev_mode_switch, hedit, new, old);
 }
 
 
@@ -108,6 +111,7 @@ HEdit* hedit_core_init(Options* options, TickitWindow* rootwin) {
     hedit->options = options;
     hedit->rootwin = rootwin;
     hedit->exit = false;
+    event_init(&hedit->ev_mode_switch);
 
     // Register the handler for the keys
     hedit->on_keypress_bind_id = tickit_window_bind_event(rootwin, TICKIT_WINDOW_ON_KEY, 0, on_keypress, hedit);
