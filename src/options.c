@@ -12,6 +12,9 @@
 #include "core.h"
 #include "util/log.h"
 
+// Some constants
+#define HEDIT_VERSION "0.1.0"
+
 static struct option long_options[] = {
     
     { "debug-fd",           required_argument, NULL, 'D' },

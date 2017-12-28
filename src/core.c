@@ -1,11 +1,13 @@
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 #include <tickit.h>
 
 #include "core.h"
-#include "util/log.h"
+#include "actions.h"
 #include "options.h"
 #include "statusbar.h"
+#include "util/log.h"
 #include "util/map.h"
 
 
@@ -33,7 +35,7 @@ static void mode_overwrite_on_input(HEdit* hedit, const char* key) {
     log_debug("OVERWRITE input: %s", key);
 }
 
-static Mode hedit_modes[] = {
+Mode hedit_modes[] = {
     
     [HEDIT_MODE_NORMAL] = {
         .id = HEDIT_MODE_NORMAL,
@@ -88,12 +90,20 @@ static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, vo
     HEdit* hedit = user;
     TickitKeyEventInfo* e = info;
 
-    if (strcmp("Escape", e->str) == 0) {
-        hedit_switch_mode(hedit, HEDIT_MODE_NORMAL);
-    } else if (strcmp("i", e->str) == 0) {
-        hedit_switch_mode(hedit, HEDIT_MODE_OVERWRITE);
+    // Wrap the key name in <> if it is not a single char
+    char key[30];
+    if (strlen(e->str) == 1) {
+        strncpy(key, e->str, 30);
+        key[29] = '\0';
     } else {
-        hedit->mode->on_input(hedit, e->str);
+        snprintf(key, 30, "<%s>", e->str);
+    }
+
+    Action* a = map_get(hedit->mode->bindings, key);
+    if (a != NULL) {
+        a->cb(hedit, &a->arg);
+    } else if (hedit->mode->on_input != NULL) {
+        hedit->mode->on_input(hedit, key);
     }
 
     return 1;

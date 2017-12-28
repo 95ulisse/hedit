@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <tickit.h>
 
+#include "actions.h"
 #include "core.h"
 #include "util/log.h"
 #include "options.h"
@@ -13,11 +14,6 @@ int main(int argc, char** argv) {
 
     // Init the logging framework as soon as possible
     log_init();
-
-    // Initialize modes and default keybindings
-    for (enum Modes m = HEDIT_MODE_NORMAL; m < HEDIT_MODE_MAX; m++) {
-        // ...
-    }
 
     // Parse the cli options
     Options options;
@@ -35,6 +31,12 @@ int main(int argc, char** argv) {
     Tickit* tickit = tickit_new_stdio();
     if (tickit == NULL) {
         log_fatal("Cannot initialize libtickit: %s.", strerror(errno));
+        return 1;
+    }
+
+    // Initialize default actions and keybindings
+    if (!hedit_init_actions()) {
+        log_fatal("Cannot initialize default actions and bindings.");
         return 1;
     }
 

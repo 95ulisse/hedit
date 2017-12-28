@@ -13,14 +13,27 @@ typedef struct HEdit HEdit;
 
 
 
-// Some constants
-#define HEDIT_VERSION "0.1.0"
+/** Union to pass a single argument to a callback function. */
+typedef union {
+    const void* ptr;
+    const char* str;
+    int i;
+    bool b;
+} Arg;
 
+/** Type of the functions that will be called when an action needs to be performed. */
+typedef void (*ActionCallback)(HEdit* hedit, const Arg* arg);
+
+typedef struct {
+    ActionCallback cb;
+    const Arg arg;
+} Action;
 
 
 enum Modes {
     HEDIT_MODE_NORMAL,
     HEDIT_MODE_OVERWRITE,
+    //HEDIT_MODE_COMMAND, // Text editing of the command line after pressing ':'
     HEDIT_MODE_MAX
 };
 
@@ -37,11 +50,14 @@ typedef struct Mode Mode;
 struct Mode {
     enum Modes id;
     const char* name;
-    Map* bindings;
+    Map* bindings; // Map of Action*
     void (*on_enter)(HEdit* hedit, Mode* prev);
     void (*on_exit)(HEdit* hedit, Mode* next);
     void (*on_input)(HEdit* hedit, const char* key);
 };
+
+/** Global definition of all the available modes. */
+extern Mode hedit_modes[];
 
 
 
