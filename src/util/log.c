@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <assert.h>
 
-#include "log.h"
+#include "util/log.h"
 #include "util/list.h"
 
 #define RESET "\x1b[0m"

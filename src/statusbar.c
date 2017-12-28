@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <tickit.h>
 
-#include "log.h"
+#include "util/log.h"
 #include "core.h"
 #include "statusbar.h"
 #include "util/event.h"

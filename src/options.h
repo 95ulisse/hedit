@@ -3,8 +3,6 @@
 
 #include <stdbool.h>
 
-#include "log.h"
-
 /** Structure containing all the HEdit command line options. */
 typedef struct {
     bool show_help;

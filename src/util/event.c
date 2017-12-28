@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "log.h"
+#include "util/log.h"
 #include "util/event.h"
 
 void* event_add(Event* ev, void (*f)(void*, ...), void* user) {

@@ -10,6 +10,7 @@
 
 #include "options.h"
 #include "core.h"
+#include "util/log.h"
 
 static struct option long_options[] = {
     

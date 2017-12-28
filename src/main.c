@@ -6,7 +6,7 @@
 #include <tickit.h>
 
 #include "core.h"
-#include "log.h"
+#include "util/log.h"
 #include "options.h"
 
 int main(int argc, char** argv) {

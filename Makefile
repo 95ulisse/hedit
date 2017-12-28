@@ -8,9 +8,9 @@ INCLUDES = -I "$(SRC)" -I "$(SRC)/util" -I "$(LIB)/libtickit/include"
 LDFLAGS += -L "$(LIB)/libtickit/.libs" -l:libtickit.a -ltermkey -lunibilium
 DEBUGFLAGS = -g -DDEBUG
 
-OBJECTS = $(OUT)/util/map.o \
+OBJECTS = $(OUT)/util/log.o \
+          $(OUT)/util/map.o \
 		  $(OUT)/util/event.o \
-          $(OUT)/log.o \
 		  $(OUT)/options.o \
 		  $(OUT)/statusbar.o \
           $(OUT)/core.o \
