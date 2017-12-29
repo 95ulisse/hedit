@@ -10,13 +10,12 @@ typedef struct HEdit HEdit;
 #include "statusbar.h"
 #include "util/map.h"
 #include "util/event.h"
+#include "util/buffer.h"
 
 
 
-/** Union to pass a single argument to a callback function. */
-typedef union {
-    const void* ptr;
-    const char* str;
+/** Generic struct to pass a single argument to a callback function. */
+typedef struct {
     int i;
     bool b;
 } Arg;
@@ -33,7 +32,7 @@ typedef struct {
 enum Modes {
     HEDIT_MODE_NORMAL,
     HEDIT_MODE_OVERWRITE,
-    //HEDIT_MODE_COMMAND, // Text editing of the command line after pressing ':'
+    HEDIT_MODE_COMMAND, // Text editing of the command line after pressing ':'
     HEDIT_MODE_MAX
 };
 
@@ -49,10 +48,10 @@ enum Modes {
 typedef struct Mode Mode;
 struct Mode {
     enum Modes id;
-    const char* name;
+    const char* display_name;
     Map* bindings; // Map of Action*
-    void (*on_enter)(HEdit* hedit, Mode* prev);
-    void (*on_exit)(HEdit* hedit, Mode* next);
+    bool (*on_enter)(HEdit* hedit, Mode* prev);
+    bool (*on_exit)(HEdit* hedit, Mode* next);
     void (*on_input)(HEdit* hedit, const char* key);
 };
 
@@ -80,6 +79,7 @@ struct HEdit {
     // UI
     TickitWindow* rootwin;
     int on_keypress_bind_id;
+    Buffer* command_buffer;
 
     // Exit flag and exit code
     bool exit;

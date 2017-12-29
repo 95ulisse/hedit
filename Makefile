@@ -11,6 +11,7 @@ DEBUGFLAGS = -g -DDEBUG
 OBJECTS = $(OUT)/util/log.o \
           $(OUT)/util/map.o \
 		  $(OUT)/util/event.o \
+		  $(OUT)/util/buffer.o \
 		  $(OUT)/options.o \
 		  $(OUT)/statusbar.o \
 		  $(OUT)/actions.o \

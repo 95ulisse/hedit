@@ -9,37 +9,76 @@
 #include "statusbar.h"
 #include "util/log.h"
 #include "util/map.h"
+#include "util/buffer.h"
 
 
-static void mode_normal_on_enter(HEdit* hedit, Mode* prev) {
+static bool mode_normal_on_enter(HEdit* hedit, Mode* prev) {
     log_debug("Entering NORMAL mode.");
+    return true;
 }
 
-static void mode_normal_on_exit(HEdit* hedit, Mode* next) {
+static bool mode_normal_on_exit(HEdit* hedit, Mode* next) {
     log_debug("Leaving NORMAL mode.");
+    return true;
 }
 
 static void mode_normal_on_input(HEdit* hedit, const char* key) {
     log_debug("NORMAL input: %s", key);
 }
 
-static void mode_overwrite_on_enter(HEdit* hedit, Mode* prev) {
+static bool mode_overwrite_on_enter(HEdit* hedit, Mode* prev) {
     log_debug("Entering OVERWRITE mode.");
+    return true;
 }
 
-static void mode_overwrite_on_exit(HEdit* hedit, Mode* next) {
+static bool mode_overwrite_on_exit(HEdit* hedit, Mode* next) {
     log_debug("Leaving OVERWRITE mode.");
+    return true;
 }
 
 static void mode_overwrite_on_input(HEdit* hedit, const char* key) {
     log_debug("OVERWRITE input: %s", key);
 }
 
+static bool mode_command_on_enter(HEdit* hedit, Mode* prev) {
+    log_debug("Entering COMMAND mode.");
+
+    // Initializes a new buffer for the command line
+    Buffer* b = buffer_new();
+    if (b == NULL) {
+        log_fatal("Cannot allocate new buffer for command line.");
+        return false;
+    }
+    hedit->command_buffer = b;
+
+    return true;
+}
+
+static bool mode_command_on_exit(HEdit* hedit, Mode* next) {
+    log_debug("Leaving COMMAND mode.");
+
+    buffer_free(hedit->command_buffer);
+    hedit->command_buffer = NULL;
+    return true;
+}
+
+static void mode_command_on_input(HEdit* hedit, const char* key) {
+
+    // Add the key to the buffer, but igonre any combo key
+    if (key[0] != '<') {
+        if (!buffer_put_char(hedit->command_buffer, key[0])) {
+            log_fatal("Cannot insert char into command line buffer.");
+        }
+        hedit_statusbar_redraw(hedit->statusbar);
+    }
+
+}
+
 Mode hedit_modes[] = {
     
     [HEDIT_MODE_NORMAL] = {
         .id = HEDIT_MODE_NORMAL,
-        .name = "Normal",
+        .display_name = "NORMAL",
         .bindings = NULL,
         .on_enter = mode_normal_on_enter,
         .on_exit = mode_normal_on_exit,
@@ -48,11 +87,20 @@ Mode hedit_modes[] = {
 
     [HEDIT_MODE_OVERWRITE] = {
         .id = HEDIT_MODE_OVERWRITE,
-        .name = "Overwrite",
+        .display_name = "OVERWRITE",
         .bindings = NULL,
         .on_enter = mode_overwrite_on_enter,
         .on_exit = mode_overwrite_on_exit,
         .on_input = mode_overwrite_on_input
+    },
+
+    [HEDIT_MODE_COMMAND] = {
+        .id = HEDIT_MODE_COMMAND,
+        .display_name = "NORMAL",
+        .bindings = NULL,
+        .on_enter = mode_command_on_enter,
+        .on_exit = mode_command_on_exit,
+        .on_input = mode_command_on_input
     }
 
 };
@@ -69,11 +117,16 @@ void hedit_switch_mode(HEdit* hedit, enum Modes m) {
 
     // Perform the switch and invoke the enter/exit events
     if (old != NULL && old->on_exit != NULL) {
-        old->on_exit(hedit, new);
+        if (!old->on_exit(hedit, new)) {
+            return; // Switch vetoed
+        }
     }
     hedit->mode = new;
     if (new->on_enter != NULL) {
-        new->on_enter(hedit, old == NULL ? new : old);
+        if (!new->on_enter(hedit, old == NULL ? new : old)) {
+            hedit->mode = old; // Switch vetoed
+            return;
+        }
     }
 
     // Fire the event
