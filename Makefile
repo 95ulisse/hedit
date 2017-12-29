@@ -7,6 +7,7 @@ CFLAGS += -std=c99 -Wall -pedantic -D_POSIX_C_SOURCE=200809L
 INCLUDES = -I "$(SRC)" -I "$(SRC)/util" -I "$(LIB)/libtickit/include"
 LDFLAGS += -L "$(LIB)/libtickit/.libs" -l:libtickit.a -ltermkey -lunibilium
 DEBUGFLAGS = -g -DDEBUG
+OPTFLAGS = -O2 -DNDEBUG
 
 OBJECTS = $(OUT)/util/log.o \
           $(OUT)/util/map.o \
@@ -20,6 +21,7 @@ OBJECTS = $(OUT)/util/log.o \
 
 
 # Default task
+all: _OPT=$(OPTFLAGS)
 all: hedit
 
 
@@ -34,11 +36,11 @@ libtickit:
 
 $(OUT)/%.o: $(SRC)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(_DEBUG) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+	$(CC) $(_DEBUG) $(_OPT) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
 hedit: libtickit $(OBJECTS)
 	@mkdir -p $(OUT)
-	$(CC) $(_DEBUG) $(CFLAGS) $(INCLUDES) -o $(OUT)/hedit $(OBJECTS) $(LDFLAGS)
+	$(CC) $(_DEBUG) $(_OPT) $(CFLAGS) $(INCLUDES) -o $(OUT)/hedit $(OBJECTS) $(LDFLAGS)
 
 debug: _DEBUG=$(DEBUGFLAGS)
 debug: hedit
