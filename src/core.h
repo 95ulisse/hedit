@@ -59,6 +59,17 @@ struct Mode {
 extern Mode hedit_modes[];
 
 
+/** A theme is a collection of pens used to draw the various parts of the UI. */
+typedef struct Theme Theme;
+struct Theme {
+    TickitPen* text;
+    TickitPen* cursor;
+
+    // When adding a new field to this structure, remember to update the default theme
+    // and the `free_theme` function in core.c.
+};
+
+
 
 /**
  * Global state of the editor.
@@ -72,14 +83,16 @@ struct HEdit {
     // Components
     Mode* mode;
     Statusbar* statusbar;
+    Buffer* command_buffer;
 
     // Events
     Event ev_mode_switch;
 
     // UI
     TickitWindow* rootwin;
+    Map* themes;
+    Theme* theme;
     int on_keypress_bind_id;
-    Buffer* command_buffer;
 
     // Exit flag and exit code
     bool exit;
@@ -103,8 +116,16 @@ HEdit* hedit_core_init(Options* options, TickitWindow* rootwin);
  */
 void hedit_core_teardown(HEdit* hedit);
 
-
 /** Switches the editor to a new mode. */
 void hedit_switch_mode(HEdit* hedit, enum Modes m);
+
+/** Registers a new theme. */
+bool hedit_register_theme(HEdit* hedit, const char* name, Theme* theme);
+
+/** Unregisters a theme and releases all the resources held by it. */
+void hedit_unregister_theme(HEdit* hedit, const char* name);
+
+/** Selectes a new theme and redraws the whole UI. */
+bool hedit_switch_theme(HEdit* hedit, const char* name);
 
 #endif

@@ -57,6 +57,10 @@ Buffer* buffer_new() {
 }
 
 void buffer_free(Buffer* buf) {
+    if (buf == NULL) {
+        return;
+    }
+
     ASSERT_INVARIANT(buf);
     free(buf->start);
     free(buf);

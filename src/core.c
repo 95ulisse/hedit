@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <errno.h>
 #include <tickit.h>
 
 #include "core.h"
@@ -64,7 +65,7 @@ static bool mode_command_on_exit(HEdit* hedit, Mode* next) {
 
 static void mode_command_on_input(HEdit* hedit, const char* key) {
 
-    // Add the key to the buffer, but igonre any combo key
+    // Add the key to the buffer, but ignore any combo key
     if (key[0] != '<') {
         if (!buffer_put_char(hedit->command_buffer, key[0])) {
             log_fatal("Cannot insert char into command line buffer.");
@@ -137,6 +138,38 @@ void hedit_switch_mode(HEdit* hedit, enum Modes m) {
 // -----------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------
 
+static Theme* init_default_theme() {
+
+    Theme* theme = malloc(sizeof(Theme));
+    if (theme == NULL) {
+        log_fatal("Cannot allocate memory for default theme.");
+        return NULL;
+    }
+
+    // Text is white on black
+    theme->text = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 7,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    
+    // Cursor inverts the colors
+    theme->cursor = tickit_pen_clone(theme->text);
+    tickit_pen_set_bool_attr(theme->cursor, TICKIT_PEN_REVERSE, true);
+
+    return theme;
+
+}
+
+static bool free_theme(const char* unused, void* theme, void* unused2) {
+    Theme* t = theme;
+
+    tickit_pen_unref(t->text);
+    tickit_pen_unref(t->cursor);
+    free(t);
+
+    return true;
+}
 
 static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
 
@@ -175,6 +208,16 @@ HEdit* hedit_core_init(Options* options, TickitWindow* rootwin) {
     hedit->rootwin = rootwin;
     hedit->exit = false;
     event_init(&hedit->ev_mode_switch);
+
+    // Initialize the default theme
+    Theme* default_theme = init_default_theme();
+    if (default_theme == NULL) {
+        goto error;
+    }
+    if (!hedit_register_theme(hedit, "default", default_theme)) {
+        goto error;
+    }
+    hedit->theme = default_theme;
 
     // Register the handler for the keys
     hedit->on_keypress_bind_id = tickit_window_bind_event(rootwin, TICKIT_WINDOW_ON_KEY, 0, on_keypress, hedit);
@@ -215,7 +258,67 @@ void hedit_core_teardown(HEdit* hedit) {
     // Remove event handlers
     tickit_window_unbind_event_id(hedit->rootwin, hedit->on_keypress_bind_id);
 
+    // Clear the buffers
+    buffer_free(hedit->command_buffer);
+
+    // Free and unregister all the themes
+    if (hedit->themes != NULL) {
+        map_iterate(hedit->themes, free_theme, NULL);
+        map_free(hedit->themes);
+    }
+
     // Free the global state
     free(hedit);
+
+}
+
+bool hedit_register_theme(HEdit* hedit, const char* name, Theme* theme) {
+    
+    if (hedit->themes == NULL && (hedit->themes = map_new()) == NULL) {
+        log_fatal("Cannot allocate memory for map: %s.", strerror(errno));
+        return false;
+    }
+
+    if (!map_put(hedit->themes, name, theme)) {
+        log_error("Cannot register theme: %s.", strerror(errno));
+        return false;
+    }
+
+    log_debug("Theme %s registered.", name);
+    return true;
+
+}
+
+void hedit_unregister_theme(HEdit* hedit, const char* name) {
+
+    if (hedit->themes == NULL) {
+        return;
+    }
+
+    Theme* theme = map_delete(hedit->themes, name);
+    if (theme != NULL) {
+        free_theme(NULL, theme, NULL);
+    }
+
+}
+
+bool hedit_switch_theme(HEdit* hedit, const char* name) {
+
+    if (hedit->themes == NULL) {
+        log_error("Cannot find theme %s.", name);
+        return false;
+    }
+
+    Theme* theme = map_get(hedit->themes, name);
+    if (theme == NULL) {
+        log_error("Cannot find theme %s.", name);
+        return false;
+    }
+    
+    // Update the pointers and perform a full redraw
+    hedit->theme = theme;
+    tickit_window_expose(hedit->rootwin, NULL);
+    log_debug("Theme switched to %s.", name);
+    return true;
 
 }
