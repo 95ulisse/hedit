@@ -4,16 +4,23 @@
 #include <errno.h>
 #include <tickit.h>
 
-#include "util/log.h"
 #include "core.h"
 #include "statusbar.h"
+#include "util/log.h"
 #include "util/event.h"
+
+#define LAST_ERROR_SIZE 256
 
 struct Statusbar {
     HEdit* hedit;
     TickitWindow* win;
+    char last_error[LAST_ERROR_SIZE];
+    bool show_last_error;
+
+    // Registrations
     int on_resize_bind_id;
     void* on_mode_switch_registration;
+    void* log_sink_registration;
 };
 
 struct command_visitor_params {
@@ -27,7 +34,6 @@ void command_visitor(Buffer* buf, size_t pos, const char* str, size_t len, void*
     TickitRenderBuffer* rb = params->rb;
     Theme* theme = params->theme;
 
-    size_t totallen = buffer_get_len(buf);
     size_t cursorpos = buffer_get_cursor(buf) - pos;
 
     // The char on which the cursor is on, needs a different background
@@ -64,11 +70,23 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
     tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->text);
     tickit_renderbuffer_textf_at(e->rb, 0, 0, "-- %s --", statusbar->hedit->mode->display_name);
 
+    tickit_renderbuffer_goto(e->rb, 1, 0);
+
+    // Write the error if present.
+    // It should neve happen that we have to show an error while the user is typing a command.
+    if (statusbar->show_last_error) {
+        tickit_renderbuffer_savepen(e->rb);
+        tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->error);
+        tickit_renderbuffer_text(e->rb, statusbar->last_error);
+        tickit_renderbuffer_restore(e->rb);
+
+        return 1;
+    }
+
     // Draw the command line to reflect the current buffer contents
     Buffer* buf = statusbar->hedit->command_buffer;
     if (buf != NULL) {
         
-        tickit_renderbuffer_goto(e->rb, 1, 0);
         tickit_renderbuffer_text(e->rb, ":");
 
         struct command_visitor_params params = {
@@ -115,7 +133,28 @@ static int on_resize(TickitWindow* win, TickitEventFlags flags, void* info, void
 static void on_mode_switch(void* user, HEdit* hedit, Mode* new, Mode* old) {
     Statusbar* statusbar = user;
 
+    // Hide the last error
+    statusbar->show_last_error = false;
+
     // Force a redraw of the statusbar window
+    tickit_window_expose(statusbar->win, NULL);
+}
+
+static void on_log_message(void* user, struct log_config* config, const char* file, int line, log_severity severity, const char* format, va_list args) {
+
+    // We want to show messages of severity error and fatal on the statusbar
+    if (severity < LOG_INFO) {
+        return;
+    }
+
+    Statusbar* statusbar = user;
+
+    // Print the message to the internal buffer
+    vsnprintf(statusbar->last_error, LAST_ERROR_SIZE, format, args);
+    statusbar->last_error[LAST_ERROR_SIZE - 1] = '\0';
+    statusbar->show_last_error = true;
+
+    // Force a redraw
     tickit_window_expose(statusbar->win, NULL);
 }
 
@@ -128,6 +167,7 @@ Statusbar* hedit_statusbar_init(HEdit* hedit) {
         return NULL;
     }
     statusbar->hedit = hedit;
+    statusbar->show_last_error = false;
 
     // Create a new window for the statusbar
     TickitRect rootgeom = tickit_window_get_geometry(hedit->rootwin);
@@ -147,6 +187,7 @@ Statusbar* hedit_statusbar_init(HEdit* hedit) {
     tickit_window_bind_event(statusbar->win, TICKIT_WINDOW_ON_EXPOSE, 0, on_expose, statusbar);
     statusbar->on_resize_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_GEOMCHANGE, 0, on_resize, statusbar);
     statusbar->on_mode_switch_registration = event_add(&hedit->ev_mode_switch, on_mode_switch, statusbar);
+    statusbar->log_sink_registration = log_register_sink(on_log_message, statusbar);
 
     return statusbar;
 }
@@ -160,6 +201,7 @@ void hedit_statusbar_teardown(Statusbar* statusbar) {
     // Detach handlers
     tickit_window_unbind_event_id(statusbar->hedit->rootwin, statusbar->on_resize_bind_id);
     event_del(&statusbar->hedit->ev_mode_switch, statusbar->on_mode_switch_registration);
+    log_unregister_sink(statusbar->log_sink_registration);
 
     // Destroy the window and free the memory
     tickit_window_close(statusbar->win);

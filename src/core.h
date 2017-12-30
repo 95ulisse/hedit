@@ -64,6 +64,7 @@ typedef struct Theme Theme;
 struct Theme {
     TickitPen* text;
     TickitPen* cursor;
+    TickitPen* error;
 
     // When adding a new field to this structure, remember to update the default theme
     // and the `free_theme` function in core.c.

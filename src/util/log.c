@@ -30,6 +30,7 @@ static const char* severity_text_colors[] = {
 // Log sinks are stored as a doubly-linked list
 struct log_sink_node {
     log_sink sink;
+    void* user;
     struct list_head list;
 };
 static struct list_head sinks = LIST_HEAD_INIT(sinks);
@@ -45,11 +46,11 @@ static struct log_config config = {
 
 
 // Forward declaration of the default destination sink
-static void destination_sink(struct log_config* config, const char* file, int line, log_severity severity, const char* format, va_list args);
+static void destination_sink(void*, struct log_config* config, const char* file, int line, log_severity severity, const char* format, va_list args);
 
 void log_init() {
     config.destination = stderr;
-    log_register_sink(destination_sink);
+    log_register_sink(destination_sink, NULL);
 
     // If we failed to register the default sink for any reason (out of memory), just abort
     if (list_empty(&sinks)) {
@@ -87,7 +88,7 @@ void log_destination(FILE* destination) {
     config.destination = destination;
 }
 
-void* log_register_sink(log_sink sink) {
+void* log_register_sink(log_sink sink, void* user) {
 
     if (sink == NULL) {
         log_error(NULL, "Cannot register NULL log sink.");
@@ -101,6 +102,7 @@ void* log_register_sink(log_sink sink) {
         return NULL;
     }
     node->sink = sink;
+    node->user = user;
     list_init(&node->list);
 
     // Append the sink at the end of the list
@@ -142,7 +144,7 @@ void __hedit_log(const char* file, int line, log_severity severity, const char* 
 
         va_list args;
         va_start(args, format);
-        destination_sink(&config, file, line, severity, format, args);
+        destination_sink(NULL, &config, file, line, severity, format, args);
         va_end(args);
 
         config.colored = old_colored;
@@ -159,13 +161,13 @@ void __hedit_log(const char* file, int line, log_severity severity, const char* 
     list_for_each_member(sink, &sinks, struct log_sink_node, list) {
         va_list args;
         va_start(args, format);
-        sink->sink(&config, file, line, severity, format, args);
+        sink->sink(sink->user, &config, file, line, severity, format, args);
         va_end(args);
     }
 
 }
 
-static void destination_sink(struct log_config* config, const char* file, int line, log_severity severity, const char* format, va_list args) {
+static void destination_sink(void* unused, struct log_config* config, const char* file, int line, log_severity severity, const char* format, va_list args) {
 
     // Exit if the destination is null
     if (config->destination == NULL) {

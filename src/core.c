@@ -157,6 +157,14 @@ static Theme* init_default_theme() {
     theme->cursor = tickit_pen_clone(theme->text);
     tickit_pen_set_bool_attr(theme->cursor, TICKIT_PEN_REVERSE, true);
 
+    // Bold red for errors
+    theme->error = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 1,
+        TICKIT_PEN_BG, 16,
+        TICKIT_PEN_BOLD, true,
+        -1
+    );
+
     return theme;
 
 }
@@ -166,6 +174,7 @@ static bool free_theme(const char* unused, void* theme, void* unused2) {
 
     tickit_pen_unref(t->text);
     tickit_pen_unref(t->cursor);
+    tickit_pen_unref(t->error);
     free(t);
 
     return true;
