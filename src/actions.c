@@ -1,7 +1,8 @@
 #include <stdbool.h>
 
-#include "actions.h"
 #include "core.h"
+#include "actions.h"
+#include "commands.h"
 #include "statusbar.h"
 #include "util/log.h"
 #include "util/map.h"
@@ -26,15 +27,23 @@ static void command_del(HEdit* hedit, const Arg* arg) {
 }
 
 static void command_exec(HEdit* hedit, const Arg* arg) {
-    char command[buffer_get_len(hedit->command_buffer) + 1];
-    buffer_copy_to(hedit->command_buffer, command);
 
-    log_info("Executing command: %s", command);
-    switch_mode(hedit, &(const Arg){ .i = HEDIT_MODE_NORMAL });
+    if (buffer_get_len(hedit->command_buffer) > 0) {
+
+        // Copy the buffer to a string and execute it
+        char command[buffer_get_len(hedit->command_buffer) + 1];
+        buffer_copy_to(hedit->command_buffer, command);
+        switch_mode(hedit, &(const Arg){ .i = HEDIT_MODE_NORMAL });
+        hedit_command_exec(hedit, command);
+
+    } else {
+        switch_mode(hedit, &(const Arg){ .i = HEDIT_MODE_NORMAL });        
+    }
+
 }
 
 const Action hedit_actions[] = {
-    
+
     // Mode switch
     [HEDIT_ACTION_MODE_NORMAL] = {
         switch_mode,

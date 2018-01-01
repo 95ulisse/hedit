@@ -20,6 +20,9 @@ struct Statusbar {
     // Registrations
     int on_resize_bind_id;
     void* on_mode_switch_registration;
+    void* on_file_open_registration;
+    void* on_file_write_registration;
+    void* on_file_close_registration;
     void* log_sink_registration;
 };
 
@@ -66,8 +69,19 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
     // Clear
     tickit_renderbuffer_eraserect(e->rb, &e->rect);
 
-    // Draw the status line
+    // Open file info on the right
     tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->text);
+    if (statusbar->hedit->file != NULL) {
+        File* f = statusbar->hedit->file;
+        size_t len = strlen(hedit_file_name(f)) + (hedit_file_is_ro(f) ? 5 : 0);
+        tickit_renderbuffer_goto(e->rb, 0, tickit_window_cols(win) - len);
+        tickit_renderbuffer_text(e->rb, hedit_file_name(f));
+        if (hedit_file_is_ro(f)) {
+            tickit_renderbuffer_text(e->rb, " [ro]");
+        }
+    }
+
+    // Current mode on the left
     tickit_renderbuffer_textf_at(e->rb, 0, 0, "-- %s --", statusbar->hedit->mode->display_name);
 
     tickit_renderbuffer_goto(e->rb, 1, 0);
@@ -140,10 +154,15 @@ static void on_mode_switch(void* user, HEdit* hedit, Mode* new, Mode* old) {
     tickit_window_expose(statusbar->win, NULL);
 }
 
+static void on_file_event(void* user, HEdit* hedit, File* file) {
+    Statusbar* statusbar = user;
+    tickit_window_expose(statusbar->win, NULL);
+}
+
 static void on_log_message(void* user, struct log_config* config, const char* file, int line, log_severity severity, const char* format, va_list args) {
 
     // We want to show messages of severity error and fatal on the statusbar
-    if (severity < LOG_INFO) {
+    if (severity < LOG_ERROR) {
         return;
     }
 
@@ -187,6 +206,9 @@ Statusbar* hedit_statusbar_init(HEdit* hedit) {
     tickit_window_bind_event(statusbar->win, TICKIT_WINDOW_ON_EXPOSE, 0, on_expose, statusbar);
     statusbar->on_resize_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_GEOMCHANGE, 0, on_resize, statusbar);
     statusbar->on_mode_switch_registration = event_add(&hedit->ev_mode_switch, on_mode_switch, statusbar);
+    statusbar->on_file_open_registration = event_add(&hedit->ev_file_open, on_file_event, statusbar);
+    statusbar->on_file_write_registration = event_add(&hedit->ev_file_write, on_file_event, statusbar);
+    statusbar->on_file_close_registration = event_add(&hedit->ev_file_close, on_file_event, statusbar);
     statusbar->log_sink_registration = log_register_sink(on_log_message, statusbar);
 
     return statusbar;
@@ -201,6 +223,9 @@ void hedit_statusbar_teardown(Statusbar* statusbar) {
     // Detach handlers
     tickit_window_unbind_event_id(statusbar->hedit->rootwin, statusbar->on_resize_bind_id);
     event_del(&statusbar->hedit->ev_mode_switch, statusbar->on_mode_switch_registration);
+    event_del(&statusbar->hedit->ev_file_open, statusbar->on_file_open_registration);
+    event_del(&statusbar->hedit->ev_file_write, statusbar->on_file_write_registration);
+    event_del(&statusbar->hedit->ev_file_close, statusbar->on_file_close_registration);
     log_unregister_sink(statusbar->log_sink_registration);
 
     // Destroy the window and free the memory

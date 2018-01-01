@@ -8,25 +8,11 @@ typedef struct HEdit HEdit;
 
 #include "options.h"
 #include "statusbar.h"
+#include "file.h"
 #include "util/map.h"
 #include "util/event.h"
 #include "util/buffer.h"
 
-
-
-/** Generic struct to pass a single argument to a callback function. */
-typedef struct {
-    int i;
-    bool b;
-} Arg;
-
-/** Type of the functions that will be called when an action needs to be performed. */
-typedef void (*ActionCallback)(HEdit* hedit, const Arg* arg);
-
-typedef struct {
-    ActionCallback cb;
-    const Arg arg;
-} Action;
 
 
 enum Modes {
@@ -48,6 +34,7 @@ enum Modes {
 typedef struct Mode Mode;
 struct Mode {
     enum Modes id;
+    const char* name;
     const char* display_name;
     Map* bindings; // Map of Action*
     bool (*on_enter)(HEdit* hedit, Mode* prev);
@@ -83,13 +70,21 @@ struct HEdit {
 
     // Components
     Mode* mode;
+    File* file;
     Statusbar* statusbar;
     Buffer* command_buffer;
 
-    // Events
-    Event ev_mode_switch;
+    // Events                    // Handler signature
+    Event ev_load;               // void(*)(HEdit*);
+    Event ev_quit;               // void(*)(HEdit*);
+    Event ev_mode_switch;        // void (*)(HEdit*, Mode* new, Mode* old)
+    Event ev_file_open;          // void (*)(HEdit*, File*)
+    Event ev_file_beforewrite;   // void (*)(HEdit*, File*)
+    Event ev_file_write;         // void (*)(HEdit*, File*)
+    Event ev_file_close;         // void (*)(HEdit*, File*)
 
     // UI
+    Tickit* tickit;
     TickitWindow* rootwin;
     Map* themes;
     Theme* theme;
@@ -109,7 +104,7 @@ struct HEdit {
  * 
  * @return The newly created global state, or NULL in case of error.
  */
-HEdit* hedit_core_init(Options* options, TickitWindow* rootwin);
+HEdit* hedit_core_init(Options* options, Tickit* tickit);
 
 /**
  * Releases all the resources associated with the given state.

@@ -16,6 +16,8 @@ OBJECTS = $(OUT)/util/log.o \
 		  $(OUT)/options.o \
 		  $(OUT)/statusbar.o \
 		  $(OUT)/actions.o \
+		  $(OUT)/commands.o \
+		  $(OUT)/file.o \
           $(OUT)/core.o \
           $(OUT)/main.o
 

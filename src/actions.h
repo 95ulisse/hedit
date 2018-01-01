@@ -4,8 +4,23 @@
 #include <stdbool.h>
 #include "core.h"
 
+/** Generic struct to pass a single argument to a callback function. */
+typedef struct {
+    int i;
+    bool b;
+} Arg;
+
+/** Type of the functions that will be called when an action needs to be performed. */
+typedef void (*ActionCallback)(HEdit* hedit, const Arg* arg);
+
+/** An action is bound to a key stroke and has no parameters. */
+typedef struct {
+    ActionCallback cb;
+    const Arg arg;
+} Action;
+
 enum Actions {
-    
+
     // Mode switch
     HEDIT_ACTION_MODE_NORMAL,
     HEDIT_ACTION_MODE_OVERWRITE,

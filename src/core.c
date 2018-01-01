@@ -6,6 +6,7 @@
 
 #include "core.h"
 #include "actions.h"
+#include "commands.h"
 #include "options.h"
 #include "statusbar.h"
 #include "util/log.h"
@@ -14,12 +15,10 @@
 
 
 static bool mode_normal_on_enter(HEdit* hedit, Mode* prev) {
-    log_debug("Entering NORMAL mode.");
     return true;
 }
 
 static bool mode_normal_on_exit(HEdit* hedit, Mode* next) {
-    log_debug("Leaving NORMAL mode.");
     return true;
 }
 
@@ -28,12 +27,10 @@ static void mode_normal_on_input(HEdit* hedit, const char* key) {
 }
 
 static bool mode_overwrite_on_enter(HEdit* hedit, Mode* prev) {
-    log_debug("Entering OVERWRITE mode.");
     return true;
 }
 
 static bool mode_overwrite_on_exit(HEdit* hedit, Mode* next) {
-    log_debug("Leaving OVERWRITE mode.");
     return true;
 }
 
@@ -42,7 +39,6 @@ static void mode_overwrite_on_input(HEdit* hedit, const char* key) {
 }
 
 static bool mode_command_on_enter(HEdit* hedit, Mode* prev) {
-    log_debug("Entering COMMAND mode.");
 
     // Initializes a new buffer for the command line
     Buffer* b = buffer_new();
@@ -56,8 +52,6 @@ static bool mode_command_on_enter(HEdit* hedit, Mode* prev) {
 }
 
 static bool mode_command_on_exit(HEdit* hedit, Mode* next) {
-    log_debug("Leaving COMMAND mode.");
-
     buffer_free(hedit->command_buffer);
     hedit->command_buffer = NULL;
     return true;
@@ -79,6 +73,7 @@ Mode hedit_modes[] = {
     
     [HEDIT_MODE_NORMAL] = {
         .id = HEDIT_MODE_NORMAL,
+        .name = "NORMAL",
         .display_name = "NORMAL",
         .bindings = NULL,
         .on_enter = mode_normal_on_enter,
@@ -88,6 +83,7 @@ Mode hedit_modes[] = {
 
     [HEDIT_MODE_OVERWRITE] = {
         .id = HEDIT_MODE_OVERWRITE,
+        .name = "OVERWRITE",
         .display_name = "OVERWRITE",
         .bindings = NULL,
         .on_enter = mode_overwrite_on_enter,
@@ -97,6 +93,7 @@ Mode hedit_modes[] = {
 
     [HEDIT_MODE_COMMAND] = {
         .id = HEDIT_MODE_COMMAND,
+        .name = "COMMAND",
         .display_name = "NORMAL",
         .bindings = NULL,
         .on_enter = mode_command_on_enter,
@@ -131,6 +128,7 @@ void hedit_switch_mode(HEdit* hedit, enum Modes m) {
     }
 
     // Fire the event
+    log_debug("Mode switch: %s -> %s", old == NULL ? NULL : old->name, new->name);
     event_fire(&hedit->ev_mode_switch, hedit, new, old);
 }
 
@@ -205,7 +203,7 @@ static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, vo
 
 }
 
-HEdit* hedit_core_init(Options* options, TickitWindow* rootwin) {
+HEdit* hedit_core_init(Options* options, Tickit* tickit) {
 
     // Allocate space for the global state
     HEdit* hedit = calloc(1, sizeof(HEdit));
@@ -214,9 +212,16 @@ HEdit* hedit_core_init(Options* options, TickitWindow* rootwin) {
         goto error;
     }
     hedit->options = options;
-    hedit->rootwin = rootwin;
+    hedit->tickit = tickit;
+    hedit->rootwin = tickit_get_rootwin(tickit);
     hedit->exit = false;
+    event_init(&hedit->ev_load);
+    event_init(&hedit->ev_quit);
     event_init(&hedit->ev_mode_switch);
+    event_init(&hedit->ev_file_open);
+    event_init(&hedit->ev_file_beforewrite);
+    event_init(&hedit->ev_file_write);
+    event_init(&hedit->ev_file_close);
 
     // Initialize the default theme
     Theme* default_theme = init_default_theme();
@@ -229,7 +234,7 @@ HEdit* hedit_core_init(Options* options, TickitWindow* rootwin) {
     hedit->theme = default_theme;
 
     // Register the handler for the keys
-    hedit->on_keypress_bind_id = tickit_window_bind_event(rootwin, TICKIT_WINDOW_ON_KEY, 0, on_keypress, hedit);
+    hedit->on_keypress_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_KEY, 0, on_keypress, hedit);
 
     // Initialize statusbar
     if ((hedit->statusbar = hedit_statusbar_init(hedit)) == NULL) {
@@ -269,6 +274,9 @@ void hedit_core_teardown(HEdit* hedit) {
 
     // Clear the buffers
     buffer_free(hedit->command_buffer);
+    if (hedit->file != NULL) {
+        hedit_file_close(hedit->file);
+    }
 
     // Free and unregister all the themes
     if (hedit->themes != NULL) {
