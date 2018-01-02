@@ -16,7 +16,7 @@ typedef struct HEdit HEdit;
 
 
 enum Modes {
-    HEDIT_MODE_NORMAL,
+    HEDIT_MODE_NORMAL = 1,
     HEDIT_MODE_OVERWRITE,
     HEDIT_MODE_COMMAND, // Text editing of the command line after pressing ':'
     HEDIT_MODE_MAX
@@ -39,7 +39,6 @@ struct Mode {
     Map* bindings; // Map of Action*
     bool (*on_enter)(HEdit* hedit, Mode* prev);
     bool (*on_exit)(HEdit* hedit, Mode* next);
-    void (*on_input)(HEdit* hedit, const char* key);
 };
 
 /** Global definition of all the available modes. */
@@ -59,6 +58,36 @@ struct Theme {
 
 
 
+enum Views {
+    HEDIT_VIEW_SPLASH = 1,
+    HEDIT_VIEW_EDIT,
+    HEDIT_VIEW_MAX
+};
+
+/**
+ * A view decides what should be drawn on the main screen and handles all the keyboard input.
+ */
+typedef struct View View;
+struct View {
+    enum Views id;
+    const char* name;
+    bool (*on_enter)(HEdit* hedit, View* prev);
+    bool (*on_exit)(HEdit* hedit, View* next);
+    void (*on_draw)(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e);
+    void (*on_input)(HEdit* hedit, const char* key);
+};
+
+/** Global definition of all the available views. */
+extern View hedit_views[];
+
+#define INIT_VIEW(v) __init_view_##v()
+#define REGISTER_VIEW(id, definition) \
+    void __init_view_##id() { \
+        hedit_views[id] = definition; \
+    }
+
+
+
 /**
  * Global state of the editor.
  * Contains eveything needed to describe the precise state of HEdit:
@@ -71,13 +100,15 @@ struct HEdit {
     // Components
     Mode* mode;
     File* file;
+    View* view;
     Statusbar* statusbar;
     Buffer* command_buffer;
 
     // Events                    // Handler signature
-    Event ev_load;               // void(*)(HEdit*);
-    Event ev_quit;               // void(*)(HEdit*);
+    Event ev_load;               // void (*)(HEdit*);
+    Event ev_quit;               // void (*)(HEdit*);
     Event ev_mode_switch;        // void (*)(HEdit*, Mode* new, Mode* old)
+    Event ev_view_switch;        // void (*)(HEdit*, View* new, View* old)
     Event ev_file_open;          // void (*)(HEdit*, File*)
     Event ev_file_beforewrite;   // void (*)(HEdit*, File*)
     Event ev_file_write;         // void (*)(HEdit*, File*)
@@ -86,9 +117,12 @@ struct HEdit {
     // UI
     Tickit* tickit;
     TickitWindow* rootwin;
+    TickitWindow* viewwin;
     Map* themes;
     Theme* theme;
     int on_keypress_bind_id;
+    int on_resize_bind_id;
+    int on_viewwin_expose_bind_id;
 
     // Exit flag and exit code
     bool exit;
@@ -112,8 +146,10 @@ HEdit* hedit_core_init(Options* options, Tickit* tickit);
  */
 void hedit_core_teardown(HEdit* hedit);
 
+
 /** Switches the editor to a new mode. */
 void hedit_switch_mode(HEdit* hedit, enum Modes m);
+
 
 /** Registers a new theme. */
 bool hedit_register_theme(HEdit* hedit, const char* name, Theme* theme);
@@ -123,5 +159,9 @@ void hedit_unregister_theme(HEdit* hedit, const char* name);
 
 /** Selectes a new theme and redraws the whole UI. */
 bool hedit_switch_theme(HEdit* hedit, const char* name);
+
+
+/** Switches to the given view. */
+void hedit_switch_view(HEdit* hedit, enum Views v);
 
 #endif

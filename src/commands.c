@@ -56,6 +56,8 @@ static bool open(HEdit* hedit, bool force, ArgIterator* args) {
     hedit->file = f;
     event_fire(&hedit->ev_file_open, hedit, hedit->file);
 
+    hedit_switch_view(hedit, HEDIT_VIEW_EDIT);
+
     return true;
 }
 
@@ -75,6 +77,9 @@ static bool close(HEdit* hedit, bool force, ArgIterator* args) {
 
     hedit_file_close(hedit->file);
     hedit->file = NULL;
+
+    hedit_switch_view(hedit, HEDIT_VIEW_SPLASH);
+
     return true;
 
 }

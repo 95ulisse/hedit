@@ -4,7 +4,7 @@ LIB = lib
 
 CC = gcc
 CFLAGS += -std=c99 -Wall -pedantic -D_POSIX_C_SOURCE=200809L
-INCLUDES = -I "$(SRC)" -I "$(SRC)/util" -I "$(LIB)/libtickit/include"
+INCLUDES = -I "$(SRC)" -I "$(LIB)/libtickit/include"
 LDFLAGS += -L "$(LIB)/libtickit/.libs" -l:libtickit.a -ltermkey -lunibilium
 DEBUGFLAGS = -g -DDEBUG
 OPTFLAGS = -O2 -DNDEBUG
@@ -18,6 +18,8 @@ OBJECTS = $(OUT)/util/log.o \
 		  $(OUT)/actions.o \
 		  $(OUT)/commands.o \
 		  $(OUT)/file.o \
+		  $(OUT)/views/splash.o \
+		  $(OUT)/views/edit.o \
           $(OUT)/core.o \
           $(OUT)/main.o
 

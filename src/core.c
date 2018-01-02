@@ -14,30 +14,6 @@
 #include "util/buffer.h"
 
 
-static bool mode_normal_on_enter(HEdit* hedit, Mode* prev) {
-    return true;
-}
-
-static bool mode_normal_on_exit(HEdit* hedit, Mode* next) {
-    return true;
-}
-
-static void mode_normal_on_input(HEdit* hedit, const char* key) {
-    log_debug("NORMAL input: %s", key);
-}
-
-static bool mode_overwrite_on_enter(HEdit* hedit, Mode* prev) {
-    return true;
-}
-
-static bool mode_overwrite_on_exit(HEdit* hedit, Mode* next) {
-    return true;
-}
-
-static void mode_overwrite_on_input(HEdit* hedit, const char* key) {
-    log_debug("OVERWRITE input: %s", key);
-}
-
 static bool mode_command_on_enter(HEdit* hedit, Mode* prev) {
 
     // Initializes a new buffer for the command line
@@ -57,38 +33,20 @@ static bool mode_command_on_exit(HEdit* hedit, Mode* next) {
     return true;
 }
 
-static void mode_command_on_input(HEdit* hedit, const char* key) {
-
-    // Add the key to the buffer, but ignore any combo key
-    if (key[0] != '<') {
-        if (!buffer_put_char(hedit->command_buffer, key[0])) {
-            log_fatal("Cannot insert char into command line buffer.");
-        }
-        hedit_statusbar_redraw(hedit->statusbar);
-    }
-
-}
-
 Mode hedit_modes[] = {
     
     [HEDIT_MODE_NORMAL] = {
         .id = HEDIT_MODE_NORMAL,
         .name = "NORMAL",
         .display_name = "NORMAL",
-        .bindings = NULL,
-        .on_enter = mode_normal_on_enter,
-        .on_exit = mode_normal_on_exit,
-        .on_input = mode_normal_on_input
+        .bindings = NULL
     },
 
     [HEDIT_MODE_OVERWRITE] = {
         .id = HEDIT_MODE_OVERWRITE,
         .name = "OVERWRITE",
         .display_name = "OVERWRITE",
-        .bindings = NULL,
-        .on_enter = mode_overwrite_on_enter,
-        .on_exit = mode_overwrite_on_exit,
-        .on_input = mode_overwrite_on_input
+        .bindings = NULL
     },
 
     [HEDIT_MODE_COMMAND] = {
@@ -97,8 +55,7 @@ Mode hedit_modes[] = {
         .display_name = "NORMAL",
         .bindings = NULL,
         .on_enter = mode_command_on_enter,
-        .on_exit = mode_command_on_exit,
-        .on_input = mode_command_on_input
+        .on_exit = mode_command_on_exit
     }
 
 };
@@ -133,8 +90,58 @@ void hedit_switch_mode(HEdit* hedit, enum Modes m) {
 }
 
 
+
 // -----------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------
+
+
+
+// This array will be populated by the single functions in the files views/*.c
+View hedit_views[HEDIT_VIEW_MAX];
+
+void hedit_switch_view(HEdit* hedit, enum Views v) {
+    assert(v >= HEDIT_VIEW_SPLASH && v <= HEDIT_VIEW_MAX);
+
+    // If the views have not been initialized yet, do it now
+    if (hedit_views[0].id == 0) {
+        INIT_VIEW(HEDIT_VIEW_SPLASH);
+        INIT_VIEW(HEDIT_VIEW_EDIT);
+    }
+
+    View* old = hedit->view;
+    View* new = &hedit_views[v];
+
+    if (old == new) {
+        return;
+    }
+
+    // Perform the switch and invoke the enter/exit events
+    if (old != NULL && old->on_exit != NULL) {
+        if (!old->on_exit(hedit, new)) {
+            return; // Switch vetoed
+        }
+    }
+    hedit->view = new;
+    if (new->on_enter != NULL) {
+        if (!new->on_enter(hedit, old == NULL ? new : old)) {
+            hedit->view = old; // Switch vetoed
+            return;
+        }
+    }
+
+    // Fire the event
+    log_debug("View switch: %s -> %s", old == NULL ? NULL : old->name, new->name);
+    event_fire(&hedit->ev_view_switch, hedit, new, old);
+
+    tickit_window_expose(hedit->viewwin, NULL);
+}
+
+
+
+// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
+
+
 
 static Theme* init_default_theme() {
 
@@ -176,117 +183,6 @@ static bool free_theme(const char* unused, void* theme, void* unused2) {
     free(t);
 
     return true;
-}
-
-static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
-
-    HEdit* hedit = user;
-    TickitKeyEventInfo* e = info;
-
-    // Wrap the key name in <> if it is not a single char
-    char key[30];
-    if (strlen(e->str) == 1) {
-        strncpy(key, e->str, 30);
-        key[29] = '\0';
-    } else {
-        snprintf(key, 30, "<%s>", e->str);
-    }
-
-    Action* a = map_get(hedit->mode->bindings, key);
-    if (a != NULL) {
-        a->cb(hedit, &a->arg);
-    } else if (hedit->mode->on_input != NULL) {
-        hedit->mode->on_input(hedit, key);
-    }
-
-    return 1;
-
-}
-
-HEdit* hedit_core_init(Options* options, Tickit* tickit) {
-
-    // Allocate space for the global state
-    HEdit* hedit = calloc(1, sizeof(HEdit));
-    if (hedit == NULL) {
-        log_fatal("Cannot allocate memory for global state.");
-        goto error;
-    }
-    hedit->options = options;
-    hedit->tickit = tickit;
-    hedit->rootwin = tickit_get_rootwin(tickit);
-    hedit->exit = false;
-    event_init(&hedit->ev_load);
-    event_init(&hedit->ev_quit);
-    event_init(&hedit->ev_mode_switch);
-    event_init(&hedit->ev_file_open);
-    event_init(&hedit->ev_file_beforewrite);
-    event_init(&hedit->ev_file_write);
-    event_init(&hedit->ev_file_close);
-
-    // Initialize the default theme
-    Theme* default_theme = init_default_theme();
-    if (default_theme == NULL) {
-        goto error;
-    }
-    if (!hedit_register_theme(hedit, "default", default_theme)) {
-        goto error;
-    }
-    hedit->theme = default_theme;
-
-    // Register the handler for the keys
-    hedit->on_keypress_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_KEY, 0, on_keypress, hedit);
-
-    // Initialize statusbar
-    if ((hedit->statusbar = hedit_statusbar_init(hedit)) == NULL) {
-        goto error;
-    }
-
-    // Switch to normal mode
-    hedit_switch_mode(hedit, HEDIT_MODE_NORMAL);
-
-    // Exit with success
-    return hedit;
-
-error:
-
-    if (hedit != NULL) {
-        hedit_statusbar_teardown(hedit->statusbar);
-        free(hedit);
-    }
-
-    return NULL;
-
-}
-
-void hedit_core_teardown(HEdit* hedit) {
-    
-    if (hedit == NULL) {
-        return;
-    }
-
-    log_debug("Core teardown begun.");
-
-    // Terminate the single components
-    hedit_statusbar_teardown(hedit->statusbar);
-
-    // Remove event handlers
-    tickit_window_unbind_event_id(hedit->rootwin, hedit->on_keypress_bind_id);
-
-    // Clear the buffers
-    buffer_free(hedit->command_buffer);
-    if (hedit->file != NULL) {
-        hedit_file_close(hedit->file);
-    }
-
-    // Free and unregister all the themes
-    if (hedit->themes != NULL) {
-        map_iterate(hedit->themes, free_theme, NULL);
-        map_free(hedit->themes);
-    }
-
-    // Free the global state
-    free(hedit);
-
 }
 
 bool hedit_register_theme(HEdit* hedit, const char* name, Theme* theme) {
@@ -337,5 +233,186 @@ bool hedit_switch_theme(HEdit* hedit, const char* name) {
     tickit_window_expose(hedit->rootwin, NULL);
     log_debug("Theme switched to %s.", name);
     return true;
+
+}
+
+
+
+// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
+
+
+
+static int on_viewwin_expose(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
+
+    HEdit* hedit = user;
+    TickitExposeEventInfo* e = info;
+
+    // Delegate the drawing of the main window to the current view
+    assert(hedit->view != NULL);
+    tickit_renderbuffer_eraserect(e->rb, &e->rect);
+    hedit->view->on_draw(hedit, win, e);
+
+    return 1;
+}
+
+static int on_resize(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
+    HEdit* hedit = user;
+
+    // The view window should always be the full screen, except the last two lines for the statusbar
+    TickitRect parentgeom = tickit_window_get_geometry(hedit->rootwin);
+    tickit_window_set_geometry(hedit->viewwin, (TickitRect) {
+        .top = 0,
+        .left = 0,
+        .lines = parentgeom.lines - 2,
+        .cols = parentgeom.cols
+    });
+
+    // Force a repaint
+    tickit_window_expose(hedit->viewwin, NULL);
+
+    return 1;
+}
+
+static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
+
+    HEdit* hedit = user;
+    TickitKeyEventInfo* e = info;
+
+    // Wrap the key name in <> if it is not a single char
+    char key[30];
+    if (strlen(e->str) == 1) {
+        strncpy(key, e->str, 30);
+        key[29] = '\0';
+    } else {
+        snprintf(key, 30, "<%s>", e->str);
+    }
+
+    Action* a = map_get(hedit->mode->bindings, key);
+    if (a != NULL) {
+        a->cb(hedit, &a->arg);
+    } else {
+
+        // If we are in command mode, add the key to the buffer, but ignore any combo key,
+        if (hedit->mode->id == HEDIT_MODE_COMMAND) {
+            if (key[0] != '<') {
+                if (!buffer_put_char(hedit->command_buffer, key[0])) {
+                    log_fatal("Cannot insert char into command line buffer.");
+                }
+                hedit_statusbar_redraw(hedit->statusbar);
+            }
+        } else if (hedit->view->on_input != NULL) {
+            hedit->view->on_input(hedit, key);
+        }
+    }
+
+    return 1;
+
+}
+
+HEdit* hedit_core_init(Options* options, Tickit* tickit) {
+
+    // Allocate space for the global state
+    HEdit* hedit = calloc(1, sizeof(HEdit));
+    if (hedit == NULL) {
+        log_fatal("Cannot allocate memory for global state.");
+        goto error;
+    }
+    hedit->options = options;
+    hedit->tickit = tickit;
+    hedit->rootwin = tickit_get_rootwin(tickit);
+    hedit->exit = false;
+    event_init(&hedit->ev_load);
+    event_init(&hedit->ev_quit);
+    event_init(&hedit->ev_mode_switch);
+    event_init(&hedit->ev_view_switch);
+    event_init(&hedit->ev_file_open);
+    event_init(&hedit->ev_file_beforewrite);
+    event_init(&hedit->ev_file_write);
+    event_init(&hedit->ev_file_close);
+
+    // Create the window for the view
+    hedit->viewwin = tickit_window_new(hedit->rootwin, (TickitRect) {
+        .top = 0,
+        .left = 0,
+        .lines = tickit_window_lines(hedit->rootwin) - 2,
+        .cols = tickit_window_cols(hedit->rootwin)
+    }, 0);
+    if (hedit->viewwin == NULL) {
+        log_fatal("Canont create tickit window.");
+        goto error;
+    }
+
+    // Initialize the default theme
+    Theme* default_theme = init_default_theme();
+    if (default_theme == NULL) {
+        goto error;
+    }
+    if (!hedit_register_theme(hedit, "default", default_theme)) {
+        goto error;
+    }
+    hedit->theme = default_theme;
+
+    // Register the handler for the events windows
+    hedit->on_keypress_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_KEY, 0, on_keypress, hedit);
+    hedit->on_resize_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_GEOMCHANGE, 0, on_resize, hedit);
+    hedit->on_viewwin_expose_bind_id = tickit_window_bind_event(hedit->viewwin, TICKIT_WINDOW_ON_EXPOSE, 0, on_viewwin_expose, hedit);
+
+    // Initialize statusbar
+    if ((hedit->statusbar = hedit_statusbar_init(hedit)) == NULL) {
+        goto error;
+    }
+
+    // Switch to normal mode and splash view
+    hedit_switch_mode(hedit, HEDIT_MODE_NORMAL);
+    hedit_switch_view(hedit, HEDIT_VIEW_SPLASH);
+
+    // Exit with success
+    return hedit;
+
+error:
+
+    if (hedit != NULL) {
+        if (hedit->viewwin != NULL) {
+            tickit_window_destroy(hedit->viewwin);
+        }
+        hedit_statusbar_teardown(hedit->statusbar);
+        free(hedit);
+    }
+
+    return NULL;
+
+}
+
+void hedit_core_teardown(HEdit* hedit) {
+    
+    if (hedit == NULL) {
+        return;
+    }
+
+    log_debug("Core teardown begun.");
+
+    // Terminate the single components
+    hedit_statusbar_teardown(hedit->statusbar);
+
+    // Remove event handlers
+    tickit_window_unbind_event_id(hedit->rootwin, hedit->on_keypress_bind_id);
+    tickit_window_unbind_event_id(hedit->rootwin, hedit->on_resize_bind_id);
+    tickit_window_unbind_event_id(hedit->viewwin, hedit->on_viewwin_expose_bind_id);
+
+    // Clear the buffers
+    buffer_free(hedit->command_buffer);
+    if (hedit->file != NULL) {
+        hedit_file_close(hedit->file);
+    }
+
+    // Free and unregister all the themes
+    if (hedit->themes != NULL) {
+        map_iterate(hedit->themes, free_theme, NULL);
+        map_free(hedit->themes);
+    }
+
+    // Free the global state
+    free(hedit);
 
 }

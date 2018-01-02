@@ -6,6 +6,7 @@
                 "/usr/include",
                 "/usr/local/include",
                 "${workspaceRoot}",
+                "${workspaceRoot}/src",
                 "${workspaceRoot}/lib/libtickit/include"
             ],
             "defines": [],
@@ -15,6 +16,7 @@
                     "/usr/include",
                     "/usr/local/include",
                     "${workspaceRoot}",
+                    "${workspaceRoot}/src",
                     "${workspaceRoot}/lib/libtickit/include"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
@@ -36,6 +38,7 @@
                 "/usr/lib/gcc/x86_64-pc-linux-gnu/7.2.1/include-fixed",
                 "/usr/include",
                 "${workspaceRoot}",
+                "${workspaceRoot}/src",
                 "${workspaceRoot}/lib/libtickit/include"
             ],
             "defines": [],
@@ -50,6 +53,7 @@
                     "/usr/lib/gcc/x86_64-pc-linux-gnu/7.2.1/include-fixed",
                     "/usr/include",
                     "${workspaceRoot}",
+                    "${workspaceRoot}/src",
                     "${workspaceRoot}/lib/libtickit/include"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
