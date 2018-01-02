@@ -374,6 +374,7 @@ error:
 
     if (hedit != NULL) {
         if (hedit->viewwin != NULL) {
+            tickit_window_close(hedit->viewwin);
             tickit_window_destroy(hedit->viewwin);
         }
         hedit_statusbar_teardown(hedit->statusbar);
@@ -391,6 +392,11 @@ void hedit_core_teardown(HEdit* hedit) {
     }
 
     log_debug("Core teardown begun.");
+
+    // Invoke the view's on_exit handler
+    if (hedit->view->on_exit != NULL) {
+        hedit->view->on_exit(hedit, NULL);
+    }
 
     // Terminate the single components
     hedit_statusbar_teardown(hedit->statusbar);
@@ -411,6 +417,10 @@ void hedit_core_teardown(HEdit* hedit) {
         map_iterate(hedit->themes, free_theme, NULL);
         map_free(hedit->themes);
     }
+
+    // Destroy the view window
+    tickit_window_close(hedit->viewwin);
+    tickit_window_destroy(hedit->viewwin);
 
     // Free the global state
     free(hedit);
