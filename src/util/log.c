@@ -133,30 +133,6 @@ void __hedit_log(const char* file, int line, log_severity severity, const char* 
     // Assert the validity of the severity
     assert(severity >= LOG_DEBUG && severity <= LOG_FATAL);
 
-    // As an exception to the rules, if we receive a fatal message, the program is likely to terminate
-    // due to an unrecoverable error, so, even if logging is disabled, print the message to stderr.
-    if (config.quiet && severity == LOG_FATAL) {
-        
-        bool old_colored = config.colored;
-        FILE* old_destination = config.destination;
-        config.colored = isatty(STDERR_FILENO);
-        config.destination = stderr;
-
-        va_list args;
-        va_start(args, format);
-        destination_sink(NULL, &config, file, line, severity, format, args);
-        va_end(args);
-
-        config.colored = old_colored;
-        config.destination = old_destination;
-
-    }
-
-    // Exit immediately if we have to stay quiet or the event is ignored by the minimum severity
-    if (config.quiet || severity < config.min_severity) {
-        return;
-    }
-
     // Iterate all the sinks and pass all the parameters
     list_for_each_member(sink, &sinks, struct log_sink_node, list) {
         va_list args;
@@ -174,6 +150,21 @@ static void destination_sink(void* unused, struct log_config* config, const char
         return;
     }
 
+    bool colored = config->colored;
+    FILE* destination = config->destination;
+
+    // As an exception to the rules, if we receive a fatal message, the program is likely to terminate
+    // due to an unrecoverable error, so, even if logging is disabled, print the message to stderr.
+    if (config->quiet && severity >= LOG_FATAL) {
+        colored = isatty(STDERR_FILENO);
+        destination = stderr;
+    }
+
+    // Exit immediately if we have to stay quiet or the event is ignored by the minimum severity
+    else if (config->quiet || severity < config->min_severity) {
+        return;
+    }
+
     // Format current time
     time_t t;
     struct tm* tm_info;
@@ -186,23 +177,23 @@ static void destination_sink(void* unused, struct log_config* config, const char
     }
 
     // Output time and severity to destination
-    if (config->colored) {
-        fprintf(config->destination, "%s %s" BOLD "%-5s" RESET " " GRAY "%s:%d:" RESET "%s ",
+    if (colored) {
+        fprintf(destination, "%s %s" BOLD "%-5s" RESET " " GRAY "%s:%d:" RESET "%s ",
                 formatted_time, severity_colors[severity], severity_names[severity], file, line, severity_text_colors[severity]);
 
     } else {
-        fprintf(config->destination, "%s %-5s %s:%d: ", formatted_time, severity_names[severity], file, line);
+        fprintf(destination, "%s %-5s %s:%d: ", formatted_time, severity_names[severity], file, line);
     }
 
     // Now write the actual message
-    vfprintf(config->destination, format, args);
+    vfprintf(destination, format, args);
 
     // Restore the normal colors if we wrote the whole message colored
-    if (config->colored) {
-        fprintf(config->destination, RESET);
+    if (colored) {
+        fprintf(destination, RESET);
     }
 
-    fprintf(config->destination, "\n");
-    fflush(config->destination);
+    fprintf(destination, "\n");
+    fflush(destination);
 
 }
