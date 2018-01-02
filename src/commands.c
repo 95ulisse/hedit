@@ -107,13 +107,9 @@ static bool write(HEdit* hedit, bool force, ArgIterator* args) {
 
 }
 
-static bool w(HEdit* hedit, bool force, ArgIterator* args) {
-    return write(hedit, force, args);
-}
-
 static bool wq(HEdit* hedit, bool force, ArgIterator* args) {
     ArgIterator empty = { 0 };
-    return w(hedit, force, args)
+    return write(hedit, force, args)
         && quit(hedit, force, &empty);
 }
 
@@ -138,15 +134,20 @@ bool hedit_init_commands() {
         log_fatal("Cannot register command " #c "."); \
         return false; \
     }
+#define REG2(c, alias) \
+    REG(c); \
+    if (!map_put(hedit_commands, #alias, (void*) c)) { \
+        log_fatal("Cannot register command " #c "."); \
+        return false; \
+    }
 
     // Register the single commands.
     // Ignores the function pointer <-> void* cast warning.
 #pragma GCC diagnostic ignored "-Wpedantic"
-    REG(quit);
-    REG(open);
+    REG2(quit, q);
+    REG2(open, o);
     REG(close);
-    REG(w);
-    REG(write);
+    REG2(write, w);
     REG(wq);
 #pragma GCC diagnostic warning "-Wpedantic"
 
