@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
+#include <setjmp.h>
 #include <tickit.h>
 
 #include "core.h"
@@ -11,6 +13,26 @@
 #include "options.h"
 #include "util/log.h"
 #include "util/event.h"
+
+static sigjmp_buf sigint_jmpbuf;
+
+static void on_sigint(int signo) {
+    siglongjmp(sigint_jmpbuf, 1);
+}
+
+static int do_register_sigint(Tickit* t, TickitEventFlags flags, void* user) {
+    
+    // Register an handler for sigint
+    struct sigaction sa = { 0 };
+    sa.sa_handler = on_sigint;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        log_fatal("Cannot register SIGINT handler.");
+        return 0;
+    }
+
+    return 1;
+}
 
 static int on_tickit_ready(Tickit *t, TickitEventFlags flags, void *user) {
     HEdit* hedit = user;
@@ -61,7 +83,22 @@ int main(int argc, char** argv) {
     }
 
     // Fire the load event as soon as everything is ready
+    tickit_later(tickit, 0, do_register_sigint, hedit);
     tickit_later(tickit, 0, on_tickit_ready, hedit);
+
+    if (sigsetjmp(sigint_jmpbuf, true) == 1) {
+        // We ended up here because of a SIGINT, so translate it to a C-c
+        TickitKeyEventInfo e = {
+            .type = TICKIT_KEYEV_KEY,
+            .mod = TICKIT_MOD_CTRL,
+            .str = "C-c"
+        };
+        tickit_term_emit_key(tickit_get_term(tickit), &e);
+        tickit_window_expose(tickit_get_rootwin(tickit), NULL);
+
+        // Re-register the signal handler because the `tickit_run` will override it again
+        tickit_later(tickit, 0, do_register_sigint, hedit);
+    }
 
     // Main input loop
     tickit_run(tickit);
