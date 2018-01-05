@@ -19,12 +19,12 @@
         __a > __b ? __a : __b; \
     })
 
-static inline bool str2int(const char* s, int* out) {
+static inline bool str2int(const char* s, int base, int* out) {
     char *end;
     if (s[0] == '\0' || isspace((unsigned char) s[0]))
         return false;
     errno = 0;
-    long l = strtol(s, &end, 10);
+    long l = strtol(s, &end, base);
     if (l > INT_MAX || (errno == ERANGE && l == LONG_MAX))
         return false;
     if (l < INT_MIN || (errno == ERANGE && l == LONG_MIN))

@@ -181,10 +181,6 @@ static Theme* init_default_theme() {
         TICKIT_PEN_BG, 16,
         -1
     );
-    
-    // Cursor inverts the colors
-    theme->cursor = tickit_pen_clone(theme->text);
-    tickit_pen_set_bool_attr(theme->cursor, TICKIT_PEN_REVERSE, true);
 
     // Bold red for errors
     theme->error = tickit_pen_new_attrs(
@@ -194,6 +190,15 @@ static Theme* init_default_theme() {
         -1
     );
 
+    // Primary highlight for cursor
+    theme->highlight1 = tickit_pen_clone(theme->text);
+    tickit_pen_set_bool_attr(theme->highlight1, TICKIT_PEN_REVERSE, true);
+
+    // Secondary highlight
+    theme->highlight2 = tickit_pen_clone(theme->text);
+    tickit_pen_set_bool_attr(theme->highlight2, TICKIT_PEN_BOLD, true);
+    tickit_pen_set_bool_attr(theme->highlight2, TICKIT_PEN_UNDER, true);
+
     return theme;
 
 }
@@ -202,8 +207,9 @@ static bool free_theme(const char* unused, void* theme, void* unused2) {
     Theme* t = theme;
 
     tickit_pen_unref(t->text);
-    tickit_pen_unref(t->cursor);
     tickit_pen_unref(t->error);
+    tickit_pen_unref(t->highlight1);
+    tickit_pen_unref(t->highlight2);
     free(t);
 
     return true;
@@ -313,7 +319,7 @@ bool hedit_option_set(HEdit* hedit, const char* name, const char* newstr) {
                 return false;
             }
 
-            if (!str2int(newstr, &newvalue.i)) {
+            if (!str2int(newstr, 10, &newvalue.i)) {
                 log_error("Invalid value %s for option %s.", newstr, name);
                 return false;
             }

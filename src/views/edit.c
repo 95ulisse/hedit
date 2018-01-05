@@ -7,15 +7,19 @@
 #include "util/common.h"
 #include "util/log.h"
 
-// Some defines useful to shrind the drawing code
+// Some defines useful to shrink the drawing code
 
-#define WITH_CURSOR_PEN(block) \
+#define WITH_PEN(p, block) \
     do { \
         tickit_renderbuffer_savepen(s->rb); \
-        tickit_renderbuffer_setpen(s->rb, s->hedit->theme->cursor); \
+        tickit_renderbuffer_setpen(s->rb, p); \
         block; \
         tickit_renderbuffer_restore(s->rb); \
     } while (false);
+
+#define WITH_HIGHLIGHT1_PEN(block) WITH_PEN(s->hedit->theme->highlight1, block)
+#define WITH_HIGHLIGHT2_PEN(block) WITH_PEN(s->hedit->theme->highlight2, block)
+    
 
 /**
  * Private state of the edit view.
@@ -23,17 +27,20 @@
  */
 typedef struct {
     size_t cursor_pos;
+    bool left;
     size_t scroll_lines;
 } ViewState;
 
 static bool on_enter(HEdit* hedit, View* old) {
     assert(hedit->file != NULL);
 
-    hedit->viewdata = calloc(1, sizeof(ViewState));
-    if (hedit->viewdata == NULL) {
+    ViewState* s = calloc(1, sizeof(ViewState));
+    if (s == NULL) {
         log_fatal("Out of memory");
         return false;
     }
+    s->left = true;
+    hedit->viewdata = s;
 
     return true;
 }
@@ -58,7 +65,7 @@ static inline size_t byte_to_line(struct file_visitor_state* s, size_t offset) {
     return offset / s->colwidth - s->view_state->scroll_lines;
 }
 
-static void file_visitor(File* f, size_t offset, const char* data, size_t len, void* user) {
+static void file_visitor(File* f, size_t offset, const unsigned char* data, size_t len, void* user) {
     struct file_visitor_state* s = user;
     const int ascii_spacing = 2;
 
@@ -94,7 +101,7 @@ static void file_visitor(File* f, size_t offset, const char* data, size_t len, v
                     skip);
                 for (int j = i - (isfirstline ? s->colwidth - (offset % s->colwidth) : s->colwidth); j < i; j++) {
                     if (s->view_state->cursor_pos == offset + j) {
-                        WITH_CURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
+                        WITH_HIGHLIGHT2_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
                     } else {
                         tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.');
                     }
@@ -107,11 +114,19 @@ static void file_visitor(File* f, size_t offset, const char* data, size_t len, v
             }
         }
 
+        char buf[3];
+        snprintf(buf, 3, "%02x", data[i]);
         tickit_renderbuffer_text(s->rb, " ");
         if (nextbyte == s->view_state->cursor_pos) {
-            WITH_CURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%02x", data[i]));
+            if (s->view_state->left) {
+                WITH_HIGHLIGHT1_PEN(tickit_renderbuffer_textn(s->rb, buf, 1));
+                tickit_renderbuffer_textn(s->rb, buf + 1, 1);
+            } else {
+                tickit_renderbuffer_textn(s->rb, buf, 1);
+                WITH_HIGHLIGHT1_PEN(tickit_renderbuffer_textn(s->rb, buf + 1, 1));
+            }
         } else {
-            tickit_renderbuffer_textf(s->rb, "%02x", data[i]);
+            tickit_renderbuffer_text(s->rb, buf);
         }
 
         nextbyte++;
@@ -128,7 +143,7 @@ static void file_visitor(File* f, size_t offset, const char* data, size_t len, v
         skip);
     for (int j = len - (lastlinechars == 0 ? MIN(len, s->colwidth) : lastlinechars); j < len; j++) {
         if (s->view_state->cursor_pos == offset + j) {
-            WITH_CURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
+            WITH_HIGHLIGHT2_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
         } else {
             tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.');
         }
@@ -148,7 +163,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
     // Precompute the format for the line offset
     char line_offset_format[10];
     int line_offset_len = MAX(8, (int) floor(log(hedit_file_size(hedit->file)) / log(16)));
-    sprintf(line_offset_format, "%%0%dx:", line_offset_len);
+    snprintf(line_offset_format, 10, "%%0%dx:", line_offset_len);
 
     // Set the normal pen for the text
     tickit_renderbuffer_setpen(e->rb, hedit->theme->text);
@@ -183,13 +198,19 @@ static void on_movement(HEdit* hedit, enum Movement m) {
 
     switch (m) {
         case HEDIT_MOVEMENT_LEFT:
-            if (state->cursor_pos > 0) {
+            if (!state->left) {
+                state->left = true;
+            } else if (state->cursor_pos > 0) {
                 state->cursor_pos--;
+                state->left = false;
             }
             break;
         case HEDIT_MOVEMENT_RIGHT:
-            if (state->cursor_pos < hedit_file_size(hedit->file) - 1) {
+            if (state->left) {
+                state->left = false;
+            } else if (state->cursor_pos < hedit_file_size(hedit->file) - 1) {
                 state->cursor_pos++;
+                state->left = true;
             }
             break;
         case HEDIT_MOVEMENT_UP:
@@ -204,9 +225,11 @@ static void on_movement(HEdit* hedit, enum Movement m) {
             break;
         case HEDIT_MOVEMENT_LINE_START:
             state->cursor_pos -= state->cursor_pos % colwidth;
+            state->left = true;
             break;
         case HEDIT_MOVEMENT_LINE_END:
             state->cursor_pos = MIN(state->cursor_pos + colwidth - (state->cursor_pos % colwidth) - 1, hedit_file_size(hedit->file) - 1);
+            state->left = false;
             break;
         case HEDIT_MOVEMENT_PAGE_UP:
             if (state->cursor_pos >= pagesize) {
@@ -240,12 +263,37 @@ static void on_movement(HEdit* hedit, enum Movement m) {
     hedit_redraw_view(hedit);
 }
 
+static void on_input(HEdit* hedit, const char* key) {
+
+    // Accept only hex digits
+    int keyvalue = -1;
+    if (!str2int(key, 16, &keyvalue)) {
+        return;
+    }
+
+    // Update the digit under the cursor
+    ViewState* state = hedit->viewdata;
+    unsigned char byte;
+    assert(hedit_file_read_byte(hedit->file, state->cursor_pos, &byte));
+    if (state->left) {
+        byte = 16 * keyvalue + (byte % 16);
+    } else {
+        byte = (byte - (byte % 16)) + keyvalue;
+    }
+    hedit_file_write_byte(hedit->file, state->cursor_pos, byte);
+
+    // Move the cursor to the right
+    on_movement(hedit, HEDIT_MOVEMENT_RIGHT);   
+
+}
+
 static View definition = {
     .id = HEDIT_VIEW_EDIT,
     .name = "Edit",
     .on_enter = on_enter,
     .on_exit = on_exit,
     .on_draw = on_draw,
+    .on_input = on_input,
     .on_movement = on_movement
 };
 

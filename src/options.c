@@ -76,7 +76,7 @@ bool options_parse(Options* options, int argc, char** argv) {
             case 'D': {
                 // Check that the argument is a valid writable file descriptor
                 int fd = -1;
-                if (!str2int(optarg, &fd)) {
+                if (!str2int(optarg, 10, &fd)) {
                     log_fatal("Invalid file descriptor %s.", optarg);
                 } else if (!is_writable_fd(fd)) {
                     log_fatal("File descriptor %d is not writable.", fd);

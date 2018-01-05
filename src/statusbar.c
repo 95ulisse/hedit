@@ -49,7 +49,7 @@ void command_visitor(Buffer* buf, size_t pos, const char* str, size_t len, void*
         }
 
         tickit_renderbuffer_savepen(rb);
-        tickit_renderbuffer_setpen(rb, theme->cursor);
+        tickit_renderbuffer_setpen(rb, theme->highlight1);
         tickit_renderbuffer_textn(rb, str + cursorpos, 1);
         tickit_renderbuffer_restore(rb);
 
@@ -113,7 +113,7 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
         // add a fake space just to show the cursor
         if (buffer_get_cursor(buf) == buffer_get_len(buf)) {
             tickit_renderbuffer_savepen(e->rb);
-            tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->cursor);
+            tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->highlight1);
             tickit_renderbuffer_text(e->rb, " ");
             tickit_renderbuffer_restore(e->rb);
         }

@@ -30,13 +30,16 @@ bool hedit_file_is_ro(File*);
 /** Returns whether this file has been modified or not. */
 bool hedit_file_is_dirty(File*);
 
+/** Read a single byte at the given offset. */
+bool hedit_file_read_byte(File*, size_t offset, unsigned char* byte);
+
 /** Writes a single byte at the given offset. */
-bool hedit_file_write_byte(File*, size_t offset, char byte);
+bool hedit_file_write_byte(File*, size_t offset, unsigned char byte);
 
 /**
  * Visits a portion of the contents of this file.
  * The visitor function may be called more than once with different parts of the file.
  */
-void hedit_file_visit(File*, size_t start, size_t len, void (*visitor)(File*, size_t offset, const char* data, size_t len, void* user), void* user);
+void hedit_file_visit(File*, size_t start, size_t len, void (*visitor)(File*, size_t offset, const unsigned char* data, size_t len, void* user), void* user);
 
 #endif

@@ -12,7 +12,7 @@
 #include "util/common.h"
 
 struct File {
-    char* mem;
+    unsigned char* mem;
     size_t size;
     char* name;
     bool ro;
@@ -58,7 +58,7 @@ File* hedit_file_open(const char* path) {
     }
 
     // mmap the file to memory
-    void* mem = mmap(NULL, s.st_size, ro ? PROT_READ : (PROT_READ | PROT_WRITE), MAP_PRIVATE, fd, 0);
+    void* mem = mmap(NULL, s.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
     if (mem == MAP_FAILED) {
         log_error("Cannot mmap %s: %s.", path, strerror(errno));
         close(fd);
@@ -194,7 +194,7 @@ bool hedit_file_is_dirty(File* file) {
     return file->dirty;
 }
 
-bool hedit_file_write_byte(File* file, size_t offset, char byte) {
+bool hedit_file_write_byte(File* file, size_t offset, unsigned char byte) {
     
     // Bounds check
     if (offset >= file->size) {
@@ -207,7 +207,19 @@ bool hedit_file_write_byte(File* file, size_t offset, char byte) {
     return true;
 }
 
-void hedit_file_visit(File* file, size_t start, size_t len, void (*visitor)(File*, size_t offset, const char* data, size_t len, void* user), void* user) {
+bool hedit_file_read_byte(File* file, size_t offset, unsigned char* byte) {
+    
+    // Bounds check
+    if (offset >= file->size) {
+        log_error("Read out of bounds.");
+        return false;
+    }
+
+    *byte = file->mem[offset];
+    return true;
+}
+
+void hedit_file_visit(File* file, size_t start, size_t len, void (*visitor)(File*, size_t offset, const unsigned char* data, size_t len, void* user), void* user) {
 
     if (start >= file->size || len <= 0) {
         return;
