@@ -580,3 +580,7 @@ void hedit_core_teardown(HEdit* hedit) {
 void hedit_redraw(HEdit* hedit) {
     tickit_window_expose(hedit->rootwin, NULL);
 }
+
+void hedit_redraw_view(HEdit* hedit) {
+    tickit_window_expose(hedit->viewwin, NULL);
+}

@@ -181,6 +181,9 @@ void hedit_core_teardown(HEdit* hedit);
 /** Forces a full redraw of the UI. */
 void hedit_redraw(HEdit* hedit);
 
+/** Forces a full redraw of the current view. */
+void hedit_redraw_view(HEdit* hedit);
+
 
 /** Switches the editor to a new mode. */
 void hedit_switch_mode(HEdit* hedit, enum Modes m);
