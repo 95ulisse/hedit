@@ -3,20 +3,15 @@
 
 #include <stdbool.h>
 #include "core.h"
-
-/** Generic struct to pass a single argument to a callback function. */
-typedef struct {
-    int i;
-    bool b;
-} Arg;
+#include "util/common.h"
 
 /** Type of the functions that will be called when an action needs to be performed. */
-typedef void (*ActionCallback)(HEdit* hedit, const Arg* arg);
+typedef void (*ActionCallback)(HEdit* hedit, const Value* arg);
 
 /** An action is bound to a key stroke and has no parameters. */
 typedef struct {
     ActionCallback cb;
-    const Arg arg;
+    const Value arg;
 } Action;
 
 enum Actions {

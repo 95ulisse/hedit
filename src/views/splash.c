@@ -1,3 +1,4 @@
+#include <string.h>
 #include <tickit.h>
 
 #include "core.h"

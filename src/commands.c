@@ -113,6 +113,22 @@ static bool wq(HEdit* hedit, bool force, ArgIterator* args) {
         && quit(hedit, force, &empty);
 }
 
+static bool set(HEdit* hedit, bool force, ArgIterator* args) {
+    
+    // Option name
+    char* name = it_next(args);
+    if (!name) {
+        log_error("Option name required. Usage: set option [value]");
+        return false;
+    }
+
+    // Value might be optional
+    char* value = it_next(args);
+
+    return hedit_option_set(hedit, name, value);
+
+}
+
 
 
 // ----------------------------------------------------------------------------
@@ -149,6 +165,7 @@ bool hedit_init_commands() {
     REG(close);
     REG2(write, w);
     REG(wq);
+    REG(set);
 #pragma GCC diagnostic warning "-Wpedantic"
 
     return true;

@@ -3,13 +3,12 @@
 #include <getopt.h>
 #include <errno.h>
 #include <string.h>
-#include <limits.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <ctype.h>
 
 #include "options.h"
 #include "core.h"
+#include "util/common.h"
 #include "util/log.h"
 
 // Some constants
@@ -47,22 +46,6 @@ static void print_usage(const char* selfpath) {
 
 static void print_version() {
     printf("HEdit v" HEDIT_VERSION "\n");
-}
-
-static bool str2int(const char* s, int* out) {
-    char *end;
-    if (s[0] == '\0' || isspace((unsigned char) s[0]))
-        return false;
-    errno = 0;
-    long l = strtol(s, &end, 10);
-    if (l > INT_MAX || (errno == ERANGE && l == LONG_MAX))
-        return false;
-    if (l < INT_MIN || (errno == ERANGE && l == LONG_MIN))
-        return false;
-    if (*end != '\0')
-        return false;
-    *out = l;
-    return true;
 }
 
 static bool is_writable_fd(int fd) {

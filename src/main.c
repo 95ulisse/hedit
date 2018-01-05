@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
             .str = "C-c"
         };
         tickit_term_emit_key(tickit_get_term(tickit), &e);
-        tickit_window_expose(tickit_get_rootwin(tickit), NULL);
+        hedit_redraw(hedit);
 
         // Re-register the signal handler because the `tickit_run` will override it again
         tickit_later(tickit, 0, do_register_sigint, hedit);

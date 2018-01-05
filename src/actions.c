@@ -8,11 +8,11 @@
 #include "util/map.h"
 #include "util/buffer.h"
 
-static void switch_mode(HEdit* hedit, const Arg* arg) {
+static void switch_mode(HEdit* hedit, const Value* arg) {
     hedit_switch_mode(hedit, (enum Modes) arg->i);
 }
 
-static void command_move(HEdit* hedit, const Arg* arg) {
+static void command_move(HEdit* hedit, const Value* arg) {
     if (arg->b) {
         buffer_set_cursor(hedit->command_buffer, arg->i < 0 ? 0 : buffer_get_len(hedit->command_buffer));
     } else {
@@ -21,23 +21,23 @@ static void command_move(HEdit* hedit, const Arg* arg) {
     hedit_statusbar_redraw(hedit->statusbar);
 }
 
-static void command_del(HEdit* hedit, const Arg* arg) {
+static void command_del(HEdit* hedit, const Value* arg) {
     buffer_del(hedit->command_buffer, arg->i);
     hedit_statusbar_redraw(hedit->statusbar);
 }
 
-static void command_exec(HEdit* hedit, const Arg* arg) {
+static void command_exec(HEdit* hedit, const Value* arg) {
 
     if (buffer_get_len(hedit->command_buffer) > 0) {
 
         // Copy the buffer to a string and execute it
         char command[buffer_get_len(hedit->command_buffer) + 1];
         buffer_copy_to(hedit->command_buffer, command);
-        switch_mode(hedit, &(const Arg){ .i = HEDIT_MODE_NORMAL });
+        switch_mode(hedit, &(const Value){ .i = HEDIT_MODE_NORMAL });
         hedit_command_exec(hedit, command);
 
     } else {
-        switch_mode(hedit, &(const Arg){ .i = HEDIT_MODE_NORMAL });        
+        switch_mode(hedit, &(const Value){ .i = HEDIT_MODE_NORMAL });        
     }
 
 }

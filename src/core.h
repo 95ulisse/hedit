@@ -9,6 +9,7 @@ typedef struct HEdit HEdit;
 #include "options.h"
 #include "statusbar.h"
 #include "file.h"
+#include "util/common.h"
 #include "util/map.h"
 #include "util/event.h"
 #include "util/buffer.h"
@@ -88,6 +89,24 @@ extern View hedit_views[];
 
 
 
+enum OptionType {
+    HEDIT_OPTION_TYPE_INT = 1,
+    HEDIT_OPTION_TYPE_BOOL,
+    HEDIT_OPTION_TYPE_MAX
+};
+
+/** A single `:set` option of the editor. */
+typedef struct Option Option;
+struct Option {
+    const char* name;
+    enum OptionType type;
+    Value default_value;
+    Value value;
+    bool (*on_change)(HEdit*, Option*, const Value*);
+};
+
+
+
 /**
  * Global state of the editor.
  * Contains eveything needed to describe the precise state of HEdit:
@@ -95,10 +114,9 @@ extern View hedit_views[];
  */
 struct HEdit {
 
-    Options* options;
-
     // Components
     Mode* mode;
+    Map* options; // Map of Option*
     File* file;
     View* view;
     Statusbar* statusbar;
@@ -146,6 +164,9 @@ HEdit* hedit_core_init(Options* options, Tickit* tickit);
  */
 void hedit_core_teardown(HEdit* hedit);
 
+/** Forces a full redraw of the UI. */
+void hedit_redraw(HEdit* hedit);
+
 
 /** Switches the editor to a new mode. */
 void hedit_switch_mode(HEdit* hedit, enum Modes m);
@@ -159,6 +180,14 @@ void hedit_unregister_theme(HEdit* hedit, const char* name);
 
 /** Selectes a new theme and redraws the whole UI. */
 bool hedit_switch_theme(HEdit* hedit, const char* name);
+
+
+/** Registers a new option. */
+bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type, const Value default_value,
+                           bool (*on_change)(HEdit*, Option*, const Value*));
+
+/** Changes the value of an option. */
+bool hedit_option_set(HEdit* hedit, const char* name, const char* newvalue);
 
 
 /** Switches to the given view. */

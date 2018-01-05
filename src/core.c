@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <tickit.h>
 
@@ -230,12 +231,139 @@ bool hedit_switch_theme(HEdit* hedit, const char* name) {
     
     // Update the pointers and perform a full redraw
     hedit->theme = theme;
-    tickit_window_expose(hedit->rootwin, NULL);
+    hedit_redraw(hedit);
     log_debug("Theme switched to %s.", name);
     return true;
 
 }
 
+
+
+// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
+
+
+
+bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type, const Value default_value,
+                           bool (*on_change)(HEdit*, Option*, const Value*))
+{
+    assert(type >= HEDIT_OPTION_TYPE_INT && type <= HEDIT_OPTION_TYPE_MAX);
+
+    Option* opt = malloc(sizeof(Option));
+    if (opt == NULL) {
+        log_fatal("Out of memory.");
+        return false;
+    }
+    opt->name = name;
+    opt->type = type;
+    opt->default_value = default_value;
+    opt->value = default_value;
+    opt->on_change = on_change;
+
+    if (!map_put(hedit->options, name, opt)) {
+        log_fatal("Out of memory.");
+        free(opt);
+        return false;
+    }
+
+    return true;
+}
+
+bool hedit_option_set(HEdit* hedit, const char* name, const char* newstr) {
+
+    // Look for the option in the map
+    Option* opt = map_get(hedit->options, name);
+    if (opt == NULL) {
+        log_error("Unknown option %s.", name);
+        return false;
+    }
+
+    Value newvalue = { 0 };
+
+    switch (opt->type) {
+
+        case HEDIT_OPTION_TYPE_INT:
+
+            // Argument is required
+            if (newstr == NULL) {
+                log_error("Value required.");
+                return false;
+            }
+
+            if (!str2int(newstr, &newvalue.i)) {
+                log_error("Invalid value %s for option %s.", newstr, name);
+                return false;
+            }
+
+            break;
+
+        case HEDIT_OPTION_TYPE_BOOL:
+
+            // Bool options might not have an argument, which defaults to true
+            if (newstr == NULL) {
+                newvalue.b = true;
+            } else if (strcasecmp("true", newstr) == 0 || strcasecmp("yes", newstr) == 0) {
+                newvalue.b = true;
+            } else if (strcasecmp("false", newstr) == 0 || strcasecmp("no", newstr) == 0) {
+                newvalue.b = false;
+            } else {
+                log_error("Invalid value %s for option %s.", newstr, name);
+                return false;
+            }
+            break;
+
+        default:
+            assert(false);
+
+    }
+
+    // Invoke the callback and change the option
+    if (opt->on_change != NULL && !opt->on_change(hedit, opt, &newvalue)) {
+        log_error("Invalid value %s for option %s.", newstr, name);
+        return false;
+    }
+    opt->value = newvalue;
+
+    return true;
+
+}
+
+static bool option_colwidth(HEdit* hedit, Option* opt, const Value* v) {
+    if (v->i < 0) {
+        return false;
+    } else {
+        hedit_redraw(hedit);
+        return true;
+    }
+}
+
+static bool option_lineoffset(HEdit* hedit, Option* opt, const Value* v) {
+    hedit_redraw(hedit);
+    return true;
+}
+
+static bool init_builtin_options(HEdit* hedit) {
+    
+    if ((hedit->options = map_new()) == NULL) {
+        log_fatal("Cannot create options map: out of memory.");
+        return false;
+    }
+
+    // Register all the options!
+
+#define REG(name, type, def, on_change) \
+    if (!hedit_option_register(hedit, name, HEDIT_OPTION_TYPE_##type, (const Value) def, on_change)) { \
+        return false; \
+    }
+
+    REG("colwidth",    INT,   { .i = 16   },  option_colwidth);
+    REG("lineoffset",  BOOL,  { .b = true },  option_lineoffset);
+
+#undef REG
+
+    return true;
+
+}
 
 
 // -----------------------------------------------------------------------------------------
@@ -310,7 +438,7 @@ static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, vo
 
 }
 
-HEdit* hedit_core_init(Options* options, Tickit* tickit) {
+HEdit* hedit_core_init(Options* clioptions, Tickit* tickit) {
 
     // Allocate space for the global state
     HEdit* hedit = calloc(1, sizeof(HEdit));
@@ -318,7 +446,6 @@ HEdit* hedit_core_init(Options* options, Tickit* tickit) {
         log_fatal("Cannot allocate memory for global state.");
         goto error;
     }
-    hedit->options = options;
     hedit->tickit = tickit;
     hedit->rootwin = tickit_get_rootwin(tickit);
     hedit->exit = false;
@@ -330,6 +457,11 @@ HEdit* hedit_core_init(Options* options, Tickit* tickit) {
     event_init(&hedit->ev_file_beforewrite);
     event_init(&hedit->ev_file_write);
     event_init(&hedit->ev_file_close);
+
+    // Initialize default builtin options
+    if (!init_builtin_options(hedit)) {
+        goto error;
+    }
 
     // Create the window for the view
     hedit->viewwin = tickit_window_new(hedit->rootwin, (TickitRect) {
@@ -373,6 +505,9 @@ HEdit* hedit_core_init(Options* options, Tickit* tickit) {
 error:
 
     if (hedit != NULL) {
+        if (hedit->options != NULL) {
+            map_free_full(hedit->options);
+        }
         if (hedit->viewwin != NULL) {
             tickit_window_close(hedit->viewwin);
             tickit_window_destroy(hedit->viewwin);
@@ -418,6 +553,9 @@ void hedit_core_teardown(HEdit* hedit) {
         map_free(hedit->themes);
     }
 
+    // Options
+    map_free_full(hedit->options);
+
     // Destroy the view window
     tickit_window_close(hedit->viewwin);
     tickit_window_destroy(hedit->viewwin);
@@ -425,4 +563,8 @@ void hedit_core_teardown(HEdit* hedit) {
     // Free the global state
     free(hedit);
 
+}
+
+void hedit_redraw(HEdit* hedit) {
+    tickit_window_expose(hedit->rootwin, NULL);
 }
