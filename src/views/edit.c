@@ -23,6 +23,7 @@
  */
 typedef struct {
     size_t cursor_pos;
+    size_t scroll_lines;
 } ViewState;
 
 static bool on_enter(HEdit* hedit, View* old) {
@@ -53,6 +54,10 @@ struct file_visitor_state {
     size_t nextbyte; // Next byte to draw
 };
 
+static inline size_t byte_to_line(struct file_visitor_state* s, size_t offset) {
+    return offset / s->colwidth - s->view_state->scroll_lines;
+}
+
 static void file_visitor(File* f, size_t offset, const char* data, size_t len, void* user) {
     struct file_visitor_state* s = user;
     const int ascii_spacing = 2;
@@ -69,7 +74,7 @@ static void file_visitor(File* f, size_t offset, const char* data, size_t len, v
      */
 
     // Position the cursor to where the next byte will be drawn
-    tickit_renderbuffer_goto(s->rb, offset / s->colwidth, 3 * (offset % s->colwidth) + (s->lineoffset ? s->line_offset_len : 0));
+    tickit_renderbuffer_goto(s->rb, byte_to_line(s, offset), 3 * (offset % s->colwidth) + (s->lineoffset ? s->line_offset_len : 0));
 
     int i;
     for (i = 0; i < len; i++) {
@@ -82,13 +87,13 @@ static void file_visitor(File* f, size_t offset, const char* data, size_t len, v
                 // Skip the chars printed in a previous segment, but only if we are drawing the first line
                 bool isfirstline = (offset % s->colwidth) + i - 1 < s->colwidth;
                 int skip = isfirstline ? (offset % s->colwidth) : 0;
-                tickit_renderbuffer_goto(s->rb, nextbyte / s->colwidth - 1,
+                tickit_renderbuffer_goto(s->rb, byte_to_line(s, nextbyte) - 1,
                     3 * s->colwidth +                                // All the binary data
                     (s->lineoffset ? s->line_offset_len : 0) +       // Line offset
                     ascii_spacing +                                  // A bit of spacing
                     skip);
                 for (int j = i - (isfirstline ? s->colwidth - (offset % s->colwidth) : s->colwidth); j < i; j++) {
-                    if (s->view_state->cursor_pos == j) {
+                    if (s->view_state->cursor_pos == offset + j) {
                         WITH_CURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
                     } else {
                         tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.');
@@ -96,7 +101,7 @@ static void file_visitor(File* f, size_t offset, const char* data, size_t len, v
                 }
             }
 
-            tickit_renderbuffer_goto(s->rb, nextbyte / s->colwidth, 0);
+            tickit_renderbuffer_goto(s->rb, byte_to_line(s, nextbyte), 0);
             if (s->lineoffset) {
                 tickit_renderbuffer_textf(s->rb, s->line_offset_format, nextbyte);
             }
@@ -116,13 +121,13 @@ static void file_visitor(File* f, size_t offset, const char* data, size_t len, v
     bool isfirstline = (offset % s->colwidth) + i - 1 < s->colwidth;
     int skip = isfirstline ? (offset % s->colwidth) : 0;
     int lastlinechars = MIN(((offset % s->colwidth) + len) % s->colwidth, len);
-    tickit_renderbuffer_goto(s->rb, nextbyte / s->colwidth - (lastlinechars == 0 ? 1 : 0),
+    tickit_renderbuffer_goto(s->rb, byte_to_line(s, nextbyte) - (lastlinechars == 0 ? 1 : 0),
         3 * s->colwidth +                                // All the binary data
         (s->lineoffset ? s->line_offset_len : 0) +       // Line offset
         ascii_spacing +                                  // A bit of spacing
         skip);
     for (int j = len - (lastlinechars == 0 ? MIN(len, s->colwidth) : lastlinechars); j < len; j++) {
-        if (s->view_state->cursor_pos == j) {
+        if (s->view_state->cursor_pos == offset + j) {
             WITH_CURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
         } else {
             tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.');
@@ -157,7 +162,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
         .line_offset_len = line_offset_len + 1, // +1 for the ':'
         .colwidth = colwidth,
         .lineoffset = lineoffset,
-        .nextbyte = 0
+        .nextbyte = state->scroll_lines * colwidth
     };
     hedit_file_visit(hedit->file, visitor_state.nextbyte, colwidth * lines, file_visitor, &visitor_state);
 
@@ -221,6 +226,15 @@ static void on_movement(HEdit* hedit, enum Movement m) {
         default:
             log_warn("Unknown movement: %d", m);
             return;
+    }
+
+    // Scroll so that the cursor is always visible
+    int windowlines = tickit_window_lines(hedit->viewwin);
+    int cursor_line = state->cursor_pos / colwidth;
+    if (cursor_line < state->scroll_lines) {
+        state->scroll_lines = cursor_line;
+    } else if (cursor_line > state->scroll_lines + windowlines - 1) {
+        state->scroll_lines = cursor_line - windowlines + 1;
     }
 
     hedit_redraw_view(hedit);
