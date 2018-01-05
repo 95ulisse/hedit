@@ -34,6 +34,27 @@ static bool mode_command_on_exit(HEdit* hedit, Mode* next) {
     return true;
 }
 
+static void mode_command_on_input(HEdit* hedit, const char* key) {
+    
+    // Add the key to the buffer, but ignore any combo key,
+    if (key[0] != '<') {
+        if (!buffer_put_char(hedit->command_buffer, key[0])) {
+            log_fatal("Cannot insert char into command line buffer.");
+        }
+        hedit_statusbar_redraw(hedit->statusbar);
+    }
+
+}
+
+static void mode_overwrite_on_input(HEdit* hedit, const char* key) {
+    
+    // Delegate to the current active view
+    if (hedit->view->on_input != NULL) {
+        hedit->view->on_input(hedit, key);
+    }
+
+}
+
 Mode hedit_modes[] = {
     
     [HEDIT_MODE_NORMAL] = {
@@ -47,7 +68,8 @@ Mode hedit_modes[] = {
         .id = HEDIT_MODE_OVERWRITE,
         .name = "OVERWRITE",
         .display_name = "OVERWRITE",
-        .bindings = NULL
+        .bindings = NULL,
+        .on_input = mode_overwrite_on_input
     },
 
     [HEDIT_MODE_COMMAND] = {
@@ -56,7 +78,8 @@ Mode hedit_modes[] = {
         .display_name = "NORMAL",
         .bindings = NULL,
         .on_enter = mode_command_on_enter,
-        .on_exit = mode_command_on_exit
+        .on_exit = mode_command_on_exit,
+        .on_input = mode_command_on_input
     }
 
 };
@@ -329,7 +352,7 @@ bool hedit_option_set(HEdit* hedit, const char* name, const char* newstr) {
 }
 
 static bool option_colwidth(HEdit* hedit, Option* opt, const Value* v) {
-    if (v->i < 0) {
+    if (v->i <= 0) {
         return false;
     } else {
         hedit_redraw(hedit);
@@ -419,19 +442,8 @@ static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, vo
     Action* a = map_get(hedit->mode->bindings, key);
     if (a != NULL) {
         a->cb(hedit, &a->arg);
-    } else {
-
-        // If we are in command mode, add the key to the buffer, but ignore any combo key,
-        if (hedit->mode->id == HEDIT_MODE_COMMAND) {
-            if (key[0] != '<') {
-                if (!buffer_put_char(hedit->command_buffer, key[0])) {
-                    log_fatal("Cannot insert char into command line buffer.");
-                }
-                hedit_statusbar_redraw(hedit->statusbar);
-            }
-        } else if (hedit->view->on_input != NULL) {
-            hedit->view->on_input(hedit, key);
-        }
+    } else if (hedit->mode->on_input != NULL) {
+        hedit->mode->on_input(hedit, key);
     }
 
     return 1;

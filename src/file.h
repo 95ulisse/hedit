@@ -34,9 +34,9 @@ bool hedit_file_is_dirty(File*);
 bool hedit_file_write_byte(File*, size_t offset, char byte);
 
 /**
- * Visits the contents of this file.
+ * Visits a portion of the contents of this file.
  * The visitor function may be called more than once with different parts of the file.
  */
-void hedit_file_visit(File*, void (*visitor)(File*, size_t offset, const char* data, size_t len, void* user), void* user);
+void hedit_file_visit(File*, size_t start, size_t len, void (*visitor)(File*, size_t offset, const char* data, size_t len, void* user), void* user);
 
 #endif

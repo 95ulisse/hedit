@@ -207,9 +207,13 @@ bool hedit_file_write_byte(File* file, size_t offset, char byte) {
     return true;
 }
 
-void hedit_file_visit(File* file, void (*visitor)(File*, size_t offset, const char* data, size_t len, void* user), void* user) {
+void hedit_file_visit(File* file, size_t start, size_t len, void (*visitor)(File*, size_t offset, const char* data, size_t len, void* user), void* user) {
+
+    if (start >= file->size || len <= 0) {
+        return;
+    }
 
     // We only have a single segment, so call the visitor right away
-    visitor(file, 0, file->mem, file->size, user);
+    visitor(file, start, file->mem + start, MIN(file->size - start, len), user);
 
 }

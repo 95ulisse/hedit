@@ -40,6 +40,7 @@ struct Mode {
     Map* bindings; // Map of Action*
     bool (*on_enter)(HEdit* hedit, Mode* prev);
     bool (*on_exit)(HEdit* hedit, Mode* next);
+    void (*on_input)(HEdit* hedit, const char* key);
 };
 
 /** Global definition of all the available modes. */
@@ -65,6 +66,17 @@ enum Views {
     HEDIT_VIEW_MAX
 };
 
+enum Movement {
+    HEDIT_MOVEMENT_LEFT = 1,
+    HEDIT_MOVEMENT_RIGHT,
+    HEDIT_MOVEMENT_UP,
+    HEDIT_MOVEMENT_DOWN,
+    HEDIT_MOVEMENT_LINE_START,
+    HEDIT_MOVEMENT_LINE_END,
+    HEDIT_MOVEMENT_PAGE_UP,
+    HEDIT_MOVEMENT_PAGE_DOWN,
+};
+
 /**
  * A view decides what should be drawn on the main screen and handles all the keyboard input.
  */
@@ -76,6 +88,7 @@ struct View {
     bool (*on_exit)(HEdit* hedit, View* next);
     void (*on_draw)(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e);
     void (*on_input)(HEdit* hedit, const char* key);
+    void (*on_movement)(HEdit* hedit, enum Movement m);
 };
 
 /** Global definition of all the available views. */
@@ -119,6 +132,7 @@ struct HEdit {
     Map* options; // Map of Option*
     File* file;
     View* view;
+    void* viewdata; // Private state of the current view
     Statusbar* statusbar;
     Buffer* command_buffer;
 

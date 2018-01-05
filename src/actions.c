@@ -12,6 +12,12 @@ static void switch_mode(HEdit* hedit, const Value* arg) {
     hedit_switch_mode(hedit, (enum Modes) arg->i);
 }
 
+static void movement(HEdit* hedit, const Value* arg) {
+    if (hedit->view->on_movement != NULL) {
+        hedit->view->on_movement(hedit, (enum Movement) arg->i);
+    }
+}
+
 static void command_move(HEdit* hedit, const Value* arg) {
     if (arg->b) {
         buffer_set_cursor(hedit->command_buffer, arg->i < 0 ? 0 : buffer_get_len(hedit->command_buffer));
@@ -58,6 +64,40 @@ const Action hedit_actions[] = {
         { .i = HEDIT_MODE_COMMAND }
     },
 
+    // Cursor movement
+    [HEDIT_ACTION_MOVEMENT_LEFT] = {
+        movement,
+        { .i = HEDIT_MOVEMENT_LEFT }
+    },
+    [HEDIT_ACTION_MOVEMENT_RIGHT] = {
+        movement,
+        { .i = HEDIT_MOVEMENT_RIGHT }
+    },
+    [HEDIT_ACTION_MOVEMENT_UP] = {
+        movement,
+        { .i = HEDIT_MOVEMENT_UP }
+    },
+    [HEDIT_ACTION_MOVEMENT_DOWN] = {
+        movement,
+        { .i = HEDIT_MOVEMENT_DOWN }
+    },
+    [HEDIT_ACTION_MOVEMENT_LINE_START] = {
+        movement,
+        { .i = HEDIT_MOVEMENT_LINE_START }
+    },
+    [HEDIT_ACTION_MOVEMENT_LINE_END] = {
+        movement,
+        { .i = HEDIT_MOVEMENT_LINE_END }
+    },
+    [HEDIT_ACTION_MOVEMENT_PAGE_UP] = {
+        movement,
+        { .i = HEDIT_MOVEMENT_PAGE_UP }
+    },
+    [HEDIT_ACTION_MOVEMENT_PAGE_DOWN] = {
+        movement,
+        { .i = HEDIT_MOVEMENT_PAGE_DOWN }
+    },
+
     // Command line editing
     [HEDIT_ACTION_COMMAND_MOVE_LEFT] = {
         command_move,
@@ -101,13 +141,29 @@ typedef struct {
 static const KeyBinding* bindings[] = {
 
     [HEDIT_MODE_NORMAL] = (const KeyBinding[]){
-        { "i",          ACTION(MODE_OVERWRITE) },
-        { ":",          ACTION(MODE_COMMAND)   },
+        { "i",               ACTION(MODE_OVERWRITE)      },
+        { ":",               ACTION(MODE_COMMAND)        },
+        { "<Left>",          ACTION(MOVEMENT_LEFT)       },
+        { "<Right>",         ACTION(MOVEMENT_RIGHT)      },
+        { "<Up>",            ACTION(MOVEMENT_UP)         },
+        { "<Down>",          ACTION(MOVEMENT_DOWN)       },
+        { "<Home>",          ACTION(MOVEMENT_LINE_START) },
+        { "<End>",           ACTION(MOVEMENT_LINE_END)   },
+        { "<PageUp>",        ACTION(MOVEMENT_PAGE_UP)    },
+        { "<PageDown>",      ACTION(MOVEMENT_PAGE_DOWN)  },
         { NULL }
     },
 
     [HEDIT_MODE_OVERWRITE] = (const KeyBinding[]){
-        { "<Escape>",   ACTION(MODE_NORMAL) },
+        { "<Escape>",        ACTION(MODE_NORMAL)         },
+        { "<Left>",          ACTION(MOVEMENT_LEFT)       },
+        { "<Right>",         ACTION(MOVEMENT_RIGHT)      },
+        { "<Up>",            ACTION(MOVEMENT_UP)         },
+        { "<Down>",          ACTION(MOVEMENT_DOWN)       },
+        { "<Home>",          ACTION(MOVEMENT_LINE_START) },
+        { "<End>",           ACTION(MOVEMENT_LINE_END)   },
+        { "<PageUp>",        ACTION(MOVEMENT_PAGE_UP)    },
+        { "<PageDown>",      ACTION(MOVEMENT_PAGE_DOWN)  },
         { NULL }
     },
 

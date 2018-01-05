@@ -12,6 +12,13 @@
         __a < __b ? __a : __b; \
     })
 
+#define MAX(a, b) \
+    __extension__({ \
+        __typeof__(a) __a = (a); \
+        __typeof__(b) __b = (b); \
+        __a > __b ? __a : __b; \
+    })
+
 static inline bool str2int(const char* s, int* out) {
     char *end;
     if (s[0] == '\0' || isspace((unsigned char) s[0]))
