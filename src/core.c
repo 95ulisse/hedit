@@ -456,7 +456,7 @@ static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, vo
 
 }
 
-HEdit* hedit_core_init(Options* clioptions, Tickit* tickit) {
+HEdit* hedit_core_init(Options* cli_options, Tickit* tickit) {
 
     // Allocate space for the global state
     HEdit* hedit = calloc(1, sizeof(HEdit));
@@ -464,6 +464,7 @@ HEdit* hedit_core_init(Options* clioptions, Tickit* tickit) {
         log_fatal("Cannot allocate memory for global state.");
         goto error;
     }
+    hedit->cli_options = cli_options;
     hedit->tickit = tickit;
     hedit->rootwin = tickit_get_rootwin(tickit);
     hedit->exit = false;

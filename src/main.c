@@ -34,6 +34,23 @@ static int do_register_sigint(Tickit* t, TickitEventFlags flags, void* user) {
     return 1;
 }
 
+static int do_open_file(Tickit *t, TickitEventFlags flags, void *user) {
+    HEdit* hedit = user;
+    
+    const char* path = hedit->cli_options->file;
+    tickit_term_input_push_bytes(tickit_get_term(t), ":open ", 6);
+    tickit_term_input_push_bytes(tickit_get_term(t), path, strlen(path));
+    
+    TickitKeyEventInfo e = {
+        .type = TICKIT_KEYEV_KEY,
+        .mod = 0,
+        .str = "Enter"
+    };
+    tickit_term_emit_key(tickit_get_term(t), &e);
+
+    return 1;
+}
+
 static int on_tickit_ready(Tickit *t, TickitEventFlags flags, void *user) {
     HEdit* hedit = user;
     event_fire(&hedit->ev_load, hedit);
@@ -85,6 +102,11 @@ int main(int argc, char** argv) {
     // Fire the load event as soon as everything is ready
     tickit_later(tickit, 0, do_register_sigint, hedit);
     tickit_later(tickit, 0, on_tickit_ready, hedit);
+
+    // If a file name has been passed on the command line, issue an :open command
+    if (options.file != NULL) {
+        tickit_later(tickit, 0, do_open_file, hedit);
+    }
 
     if (sigsetjmp(sigint_jmpbuf, true) == 1) {
         // We ended up here because of a SIGINT, so translate it to a C-c

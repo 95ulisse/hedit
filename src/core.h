@@ -128,6 +128,8 @@ struct Option {
  */
 struct HEdit {
 
+    Options* cli_options;
+
     // Components
     Mode* mode;
     Map* options; // Map of Option*

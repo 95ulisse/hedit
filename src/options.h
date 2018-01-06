@@ -7,6 +7,7 @@
 typedef struct {
     bool show_help;
     bool show_version;
+    const char* file;
 } Options;
 
 /**

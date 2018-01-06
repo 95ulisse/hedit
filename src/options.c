@@ -66,6 +66,7 @@ bool options_parse(Options* options, int argc, char** argv) {
     log_min_severity(LOG_DEBUG);
     options->show_help = false;
     options->show_version = false;
+    options->file = NULL;
 
     // Args parsing
     int opt;
@@ -136,6 +137,11 @@ bool options_parse(Options* options, int argc, char** argv) {
             default:
                 goto error;
         }
+    }
+
+    // Treat the first argument as the file to open
+    if (optind < argc) {
+        options->file = argv[optind];
     }
 
     return true;
