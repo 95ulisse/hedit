@@ -91,17 +91,17 @@ static bool write(HEdit* hedit, bool force, ArgIterator* args) {
         return false;
     }
 
-    // Optionally set a new name
-    char* name = it_next(args);
-    if (name != NULL) {
-        if (!hedit_file_set_name(hedit->file, name)) {
-            return false;
-        }
+    // Optionally save to a different path
+    const char* name = it_next(args);
+    if (name == NULL) {
+        name = hedit_file_name(hedit->file);
     }
 
     event_fire(&hedit->ev_file_beforewrite, hedit, hedit->file);
-    bool res = hedit_file_save(hedit->file);
-    event_fire(&hedit->ev_file_write, hedit, hedit->file);
+    bool res = hedit_file_save(hedit->file, name, SAVE_MODE_AUTO);
+    if (res) {
+        event_fire(&hedit->ev_file_write, hedit, hedit->file);
+    }
 
     return res;
 

@@ -163,7 +163,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
     // Precompute the format for the line offset
     char line_offset_format[10];
     int line_offset_len = MAX(8, (int) floor(log(hedit_file_size(hedit->file)) / log(16)));
-    snprintf(line_offset_format, 10, "%%0%dx:", line_offset_len);
+    snprintf(line_offset_format, 10, "%%0%dx:", (unsigned char) line_offset_len);
 
     // Set the normal pen for the text
     tickit_renderbuffer_setpen(e->rb, hedit->theme->text);
@@ -273,7 +273,7 @@ static void on_input(HEdit* hedit, const char* key) {
 
     // Update the digit under the cursor
     ViewState* state = hedit->viewdata;
-    unsigned char byte;
+    unsigned char byte = 0;
     assert(hedit_file_read_byte(hedit->file, state->cursor_pos, &byte));
     if (state->left) {
         byte = 16 * keyvalue + (byte % 16);

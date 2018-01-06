@@ -6,6 +6,12 @@
 /** Opaque structure representing an open file. */
 typedef struct File File;
 
+enum FileSaveMode {
+    SAVE_MODE_AUTO = 0,
+    SAVE_MODE_ATOMIC,
+    SAVE_MODE_INPLACE
+};
+
 /** Opens the given file. */
 File* hedit_file_open(const char* path);
 
@@ -13,13 +19,10 @@ File* hedit_file_open(const char* path);
 void hedit_file_close(File*);
 
 /** Saves the file back to disk. */
-bool hedit_file_save(File*);
+bool hedit_file_save(File*, const char* path, enum FileSaveMode);
 
 /** Returns the name associated with the given file. */
 const char* hedit_file_name(File*);
-
-/** Changes the name associated with the given file. */
-bool hedit_file_set_name(File*, const char*);
 
 /** Returns the size of an opened file. */
 size_t hedit_file_size(File*);

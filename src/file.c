@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <libgen.h>
 
 #include "file.h"
 #include "util/log.h"
@@ -17,11 +18,6 @@ struct File {
     char* name;
     bool ro;
     bool dirty;
-
-    enum {
-        SAVE_MSYNC,
-        SAVE_WRITE
-    } save_mode;
 };
 
 File* hedit_file_open(const char* path) {
@@ -79,7 +75,6 @@ File* hedit_file_open(const char* path) {
     file->size = s.st_size;
     file->ro = ro;
     file->dirty = false;
-    file->save_mode = SAVE_MSYNC;
 
     if ((file->name = strdup(path)) == NULL) {
         log_fatal("Cannot allocate memory for File structure.");
@@ -87,6 +82,8 @@ File* hedit_file_open(const char* path) {
         free(file);
         return NULL;
     }
+
+    log_debug("File opened: %s.", file->name);
 
     return file;
 
@@ -97,73 +94,14 @@ void hedit_file_close(File* file) {
         return;
     }
 
+    log_debug("File closed: %s.", file->name);
+
     munmap(file->mem, file->size);
     free(file->name);
     free(file);
 }
 
-bool hedit_file_save(File* file) {
-
-    switch (file->save_mode) {
-
-        case SAVE_MSYNC: {
-
-            // If the file is read only, we cannot commit the mmapped memory region
-            // and we need to be fed another file name.
-            if (file->ro) {
-                log_error("Read only file.");
-                return false;
-            }
-
-            // Sync the mmapped memory back to disk
-            if (msync(file->mem, file->size, MS_SYNC) < 0) {
-                log_error("Cannot sync changes to disk: %s.", strerror(errno));
-                return false;
-            }
-
-            break;
-        }
-
-        case SAVE_WRITE: {
-
-            int fd;
-            while ((fd = open(file->name, O_WRONLY | O_CREAT, 0666)) == -1 && errno == EINTR);
-            if (fd < 0) {
-                log_error("Cannot open %s: %s.", file->name, strerror(errno));
-                return false;
-            }
-
-            const size_t blocksize = 64 * 1024;
-            size_t offset = 0;
-            while (offset < file->size) {
-                ssize_t written;
-                while ((written = write(fd, file->mem + offset, MIN(blocksize, file->size - offset))) == -1 && errno == EINTR);
-                if (written < 0) {
-                    log_error("Cannot write to %s: %s.", file->name, strerror(errno));
-                    close(fd);
-                    return false;
-                }
-                offset += written;
-            }
-
-            close(fd);
-
-            break;
-        }
-
-    }
-
-    file->dirty = false;
-    file->ro = false;
-    return true;
-
-}
-
-const char* hedit_file_name(File* file) {
-    return file->name;
-}
-
-bool hedit_file_set_name(File* file, const char* name) {
+static bool hedit_file_set_name(File* file, const char* name) {
     
     // Switch the old file name with the new one
     char* dup = strdup(name);
@@ -174,12 +112,226 @@ bool hedit_file_set_name(File* file, const char* name) {
     free(file->name);
     file->name = dup;
 
-    // Since we have been given a new file name, we cannot save anymore
-    // using msync, but we need to perform a full write on another file.
-    file->save_mode = SAVE_WRITE;
-    file->ro = false;
-
     return true;
+}
+
+static bool hedit_file_save_atomic(File* file, const char* path) {
+
+    // File is first saved to a temp directory,
+    // then moved to the target destination with a rename.
+    // This will fail of the original file is a synbolic or hard link,
+    // and if there are problems in restoring the original file permissions.
+
+    int oldfd = -1;
+    int dirfd = -1;
+    int tmpfd = -1;
+    char* tmpname = NULL;
+    char* pathdup = strdup(path);
+
+    if (pathdup == NULL) {
+        log_fatal("Out of memory.");
+        goto error;
+    }
+
+    // Open the original file and get some info about it
+    while ((oldfd = open(path, O_RDONLY)) == -1 && errno == EINTR);
+    if (oldfd < 0 && errno != ENOENT) {
+        log_error("Cannot open %s: %s.", path, strerror(errno));
+        goto error;
+    }
+    struct stat oldstat = { 0 };
+    if (oldfd != -1) {
+        if (lstat(path, &oldstat) < 0) {
+            log_error("Cannot stat %s: %s.", path, strerror(errno));
+            goto error;
+        }
+
+        // The rename method does not work if the target file is a symbolic or hard link
+        if (S_ISLNK(oldstat.st_mode) || oldstat.st_nlink > 1) {
+			goto error;
+        }
+    }
+
+    size_t tmpnamelen = strlen(path) + 6 /* ~~save */ + 1 /* '\0' */;
+    tmpname = malloc(sizeof(char) * tmpnamelen);
+    if (tmpname == NULL) {
+        log_fatal("Out of memory.");
+        goto error;
+    }
+    snprintf(tmpname, tmpnamelen, "%s~~save", path);
+
+    // Create the temp file
+    while ((tmpfd = open(tmpname, O_WRONLY | O_CREAT | O_TRUNC, oldfd == -1 ? 0666 : oldstat.st_mode)) == -1 && errno == EINTR);
+    if (tmpfd < 0) {
+        log_error("Cannot open %s: %s.", tmpname, strerror(errno));
+        goto error;
+    }
+
+    // If the old file existed, try to copy the owner to the temp file
+    int res;
+    if (oldfd != -1) {
+        if (oldstat.st_uid != getuid()) {
+            while ((res = fchown(tmpfd, oldstat.st_uid, (uid_t) -1)) == -1 && errno == EINTR);
+            if (res < 0) {
+                goto error;
+            }
+        }
+        if (oldstat.st_gid != getgid()) {
+            while ((res = fchown(tmpfd, (uid_t) -1, oldstat.st_gid)) == -1 && errno == EINTR);
+            if (res < 0) {
+                goto error;
+            }
+        }
+    }
+
+    // We don't need the old file anymore
+    if (oldfd != -1 ) {
+        close(oldfd);
+        oldfd = -1;
+    }
+
+    // Write to the temp file
+    const size_t blocksize = 64 * 1024;
+    size_t offset = 0;
+    while (offset < file->size) {
+        ssize_t written;
+        while ((written = write(tmpfd, file->mem + offset, MIN(blocksize, file->size - offset))) == -1 && errno == EINTR);
+        if (written < 0) {
+            log_error("Cannot write to %s: %s.", tmpname, strerror(errno));
+            goto error;
+        }
+        offset += written;
+    }
+
+    while ((res = fsync(tmpfd)) == -1 && errno == EINTR);
+    if (res < 0) {
+        log_error("Cannot fsync %s: %s.", tmpname, strerror(errno));
+        goto error;
+    }
+
+    while ((res = close(tmpfd)) == -1 && errno == EINTR);
+    if (res < 0) {
+        log_error("Cannot close %s: %s.", tmpname, strerror(errno));
+        goto error;
+    }
+
+    // Move the temp file over the original one
+    while ((res = rename(tmpname, path)) == -1 && errno == EINTR);
+    if (res < 0) {
+        log_error("Cannot rename %s to %s: %s.", tmpname, path, strerror(errno));
+        goto error;
+    }
+
+    // Open the parent directory and sync it to be sure that the rename has been committed to disk
+    while ((dirfd = open(dirname(pathdup), O_DIRECTORY | O_RDONLY)) == -1 && errno == EINTR);
+    if (dirfd < 0) {
+        log_error("Cannot open directory %s: %s.", dirname(pathdup), strerror(errno));
+        goto error;
+    }
+    while ((res = fsync(dirfd)) == -1 && errno == EINTR);
+    if (res < 0) {
+        log_error("Cannot fsync directory %s: %s.", dirname(pathdup), strerror(errno));
+        goto error;
+    }
+    close(dirfd);
+
+    free(tmpname);
+    free(pathdup);
+    log_debug("Saved atomically: %s.", path);
+    return hedit_file_set_name(file, path);
+
+error:
+    if (oldfd != -1) {
+        close(oldfd);
+    }
+    if (tmpfd != -1) {
+        close(tmpfd);
+    }
+    if (dirfd != -1) {
+        close(dirfd);
+    }
+    if (tmpname != NULL) {
+        unlink(tmpname);
+        free(tmpname);
+    }
+    if (pathdup != NULL) {
+        free(pathdup);
+    }
+    return false;
+
+}
+
+static bool hedit_file_save_inplace(File* file, const char* path) {
+    
+    int fd;
+    while ((fd = open(path, O_WRONLY | O_CREAT, 0666)) == -1 && errno == EINTR);
+    if (fd < 0) {
+        log_error("Cannot open %s: %s.", path, strerror(errno));
+        return false;
+    }
+
+    const size_t blocksize = 64 * 1024;
+    size_t offset = 0;
+    while (offset < file->size) {
+        ssize_t written;
+        while ((written = write(fd, file->mem + offset, MIN(blocksize, file->size - offset))) == -1 && errno == EINTR);
+        if (written < 0) {
+            log_error("Cannot write to %s: %s.", path, strerror(errno));
+            close(fd);
+            return false;
+        }
+        offset += written;
+    }
+
+    int res;
+    while ((res = fsync(fd)) == -1 && errno == EINTR);
+    if (res < 0) {
+        log_error("Cannot fsync %s: %s.", path, strerror(errno));
+        close(fd);
+        return false;
+    }
+
+    close(fd);
+
+    log_debug("Saved in place: %s.", path);
+    return hedit_file_set_name(file, path);
+
+}
+
+bool hedit_file_save(File* file, const char* path, enum FileSaveMode savemode) {    
+
+    bool success = false;
+    switch (savemode) {
+        
+        case SAVE_MODE_ATOMIC:
+            success = hedit_file_save_atomic(file, path);
+            break;
+        
+        case SAVE_MODE_INPLACE:
+            success = hedit_file_save_inplace(file, path);
+            break;
+        
+        case SAVE_MODE_AUTO:
+            success = hedit_file_save_atomic(file, path);
+            if (!success) {
+                success = hedit_file_save_inplace(file, path);
+            }
+            break;
+
+        default:
+            abort();
+    }
+
+    if (success) {
+        file->dirty = false;
+        file->ro = false;
+    }
+    return success;
+
+}
+
+const char* hedit_file_name(File* file) {
+    return file->name;
 }
 
 size_t hedit_file_size(File* file) {
