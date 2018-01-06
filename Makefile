@@ -52,8 +52,10 @@ debug: hedit
 clean:
 	rm -rf $(OUT)
 
-install: default
+install:
 	cp $(OUT)/hedit /usr/bin/hedit
+	chown root:root /usr/bin/hedit
+	chmod 755 /usr/bin/hedit
 
 
 
