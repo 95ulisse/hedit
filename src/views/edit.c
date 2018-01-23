@@ -302,10 +302,46 @@ static void on_input(HEdit* hedit, const char* key, bool replace) {
     
     }
 
-
     // Move the cursor to the right
     on_movement(hedit, HEDIT_MOVEMENT_RIGHT, 0);
 
+}
+
+static void on_delete(HEdit* hedit, ssize_t count) {
+    ViewState* state = hedit->viewdata;
+
+    if (count == 0) {
+        return;
+    } else if (count < 0 && state->cursor_pos < hedit_file_size(hedit->file)) {
+
+        // Delete to the right
+        hedit_file_delete(hedit->file, state->cursor_pos, -count);
+
+    } else {
+
+        if (count == 1 && state->left == false) {
+            // Set the first digit to 0
+            unsigned char byte = 0;
+            assert(hedit_file_read_byte(hedit->file, state->cursor_pos, &byte));
+            byte %= 16;
+            if (hedit_file_replace(hedit->file, state->cursor_pos, &byte, 1)) {
+                on_movement(hedit, HEDIT_MOVEMENT_LEFT, 0);
+            }
+        } else {
+            // Delete to the left
+            ssize_t start = ((ssize_t) state->cursor_pos) - count;
+            if (start < 0) {
+                count += start;
+            }
+            if (hedit_file_delete(hedit->file, start, count)) {
+                on_movement(hedit, HEDIT_MOVEMENT_LEFT, 0);
+                state->left = true; // Always keep on the left
+            }
+        }
+        
+    }
+
+    hedit_redraw_view(hedit);    
 }
 
 static View definition = {
@@ -315,7 +351,8 @@ static View definition = {
     .on_exit = on_exit,
     .on_draw = on_draw,
     .on_input = on_input,
-    .on_movement = on_movement
+    .on_movement = on_movement,
+    .on_delete = on_delete
 };
 
 REGISTER_VIEW(HEDIT_VIEW_EDIT, definition)

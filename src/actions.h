@@ -35,6 +35,8 @@ enum Actions {
     // Editing commands
     HEDIT_ACTION_UNDO,
     HEDIT_ACTION_REDO,
+    HEDIT_ACTION_DELETE_LEFT,
+    HEDIT_ACTION_DELETE_RIGHT,
 
     // Command line editing
     HEDIT_ACTION_COMMAND_MOVE_LEFT,

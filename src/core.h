@@ -92,6 +92,7 @@ struct View {
     void (*on_draw)(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e);
     void (*on_input)(HEdit* hedit, const char* key, bool replace);
     void (*on_movement)(HEdit* hedit, enum Movement m, size_t arg);
+    void (*on_delete)(HEdit* hedit, ssize_t count);
 };
 
 /** Global definition of all the available views. */

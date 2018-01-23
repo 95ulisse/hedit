@@ -47,7 +47,7 @@ static void mode_command_on_input(HEdit* hedit, const char* key) {
 }
 
 static void mode_insert_on_input(HEdit* hedit, const char* key) {
-    
+
     // Delegate to the current active view
     if (hedit->view->on_input != NULL) {
         hedit->view->on_input(hedit, key, false);

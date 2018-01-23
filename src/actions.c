@@ -42,6 +42,12 @@ static void redo(HEdit* hedit, const Value* arg) {
     }
 }
 
+static void delete(HEdit* hedit, const Value* arg) {
+    if (hedit->view->on_delete != NULL) {
+        hedit->view->on_delete(hedit, (ssize_t) arg->i);
+    }
+}
+
 static void command_move(HEdit* hedit, const Value* arg) {
     if (arg->b) {
         buffer_set_cursor(hedit->command_buffer, arg->i < 0 ? 0 : buffer_get_len(hedit->command_buffer));
@@ -133,6 +139,14 @@ const Action hedit_actions[] = {
     [HEDIT_ACTION_REDO] = {
         redo
     },
+    [HEDIT_ACTION_DELETE_LEFT] = {
+        delete,
+        { .i = 1 }
+    },
+    [HEDIT_ACTION_DELETE_RIGHT] = {
+        delete,
+        { .i = -1 }
+    },
 
     // Command line editing
     [HEDIT_ACTION_COMMAND_MOVE_LEFT] = {
@@ -195,6 +209,8 @@ static const KeyBinding* bindings[] = {
 
     [HEDIT_MODE_INSERT] = (const KeyBinding[]){
         { "<Escape>",        ACTION(MODE_NORMAL)         },
+        { "<Backspace>",     ACTION(DELETE_LEFT)         },
+        { "<Delete>",        ACTION(DELETE_RIGHT)        },
         { "<Left>",          ACTION(MOVEMENT_LEFT)       },
         { "<Right>",         ACTION(MOVEMENT_RIGHT)      },
         { "<Up>",            ACTION(MOVEMENT_UP)         },
