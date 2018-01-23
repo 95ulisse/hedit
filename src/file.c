@@ -473,25 +473,25 @@ File* hedit_file_open(const char* path) {
     }
 
     // mmap the file to memory and create the initial piece
-    Block* b = block_alloc_mmap(file, fd, s.st_size);
-    if (b == NULL) {
-        close(fd);
-        hedit_file_close(file);
-        return NULL;
+    Piece* p = NULL;
+    if (s.st_size > 0) {
+        Block* b = block_alloc_mmap(file, fd, s.st_size);
+        if (b == NULL) {
+            close(fd);
+            hedit_file_close(file);
+            return NULL;
+        }
+        p = piece_alloc(file);
+        if (p == NULL) {
+            close(fd);
+            hedit_file_close(file);
+            return NULL;
+        }
+        p->data = b->data;
+        p->size = b->size;
+        p->list.prev = &file->pieces;
+        p->list.next = &file->pieces;
     }
-    Piece* p = piece_alloc(file);
-    if (p == NULL) {
-        close(fd);
-        hedit_file_close(file);
-        return NULL;
-    }
-    p->data = b->data;
-    p->size = b->size;
-    p->list.prev = &file->pieces;
-    p->list.next = &file->pieces;
-    
-    // Now that we have the file mapped in memory, we can safely close the fd
-    close(fd);
 
     // Prepare the initial change
     Change* change = change_alloc(file, 0);
@@ -508,6 +508,9 @@ File* hedit_file_open(const char* path) {
         hedit_file_close(file);
         return NULL;
     }
+
+    // Now that we have the file mapped in memory, we can safely close the fd
+    close(fd);
 
     log_debug("File opened: %s.", file->name);
 
@@ -811,14 +814,16 @@ bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, siz
     Piece* piece;
     size_t piece_offset;
     if (!piece_find(file, offset, &piece, &piece_offset)) {
-        if (offset == file->size) {
+        if (list_empty(&file->pieces)) {
+            piece = NULL;
+            piece_offset = 0;
+        } else if (offset == file->size) {
             piece = list_last(&file->pieces, Piece, list);
             piece_offset = piece->size;
         } else {
             return false;
         }
     }
-    assert(piece != NULL);
 
     // Discard any redo history
     revision_purge(file);
@@ -850,7 +855,23 @@ bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, siz
         return false;
     }
 
-    if (piece_offset == 0 || piece_offset == piece->size) {
+    if (piece == NULL) {
+        // We have no piece to attach to because this is the first insertion to an empty file
+
+        Piece* new = piece_alloc(file);
+        if (new == NULL) {
+            return false;
+        }
+        new->data = ptr;
+        new->size = len;
+
+        // Insert as the first piece
+        new->list.prev = new->list.next = &file->pieces;
+
+        span_init(&change->original, NULL, NULL);
+        span_init(&change->replacement, new, new);       
+
+    } else if (piece_offset == 0 || piece_offset == piece->size) {
         // For how we counted offsets, the only way that the `piece_offset == piece->size` condition
         // can be true is when we are inserting at the end of the file.
 

@@ -202,6 +202,11 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
     };
     hedit_file_visit(hedit->file, visitor_state.nextbyte, colwidth * lines, file_visitor, &visitor_state);
 
+    // If the file is empty, the visitor does not get called
+    if (hedit_file_size(hedit->file) == 0) {
+        file_visitor(hedit->file, 0, NULL, 0, &visitor_state);
+    }
+
     // Fill the remaining lines with `~`
     int emptylines = lines - (hedit_file_size(hedit->file) / colwidth + 1);
     if (emptylines > 0) {
