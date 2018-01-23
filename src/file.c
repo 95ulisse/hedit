@@ -1089,8 +1089,11 @@ bool hedit_file_visit(File* file, size_t start, size_t len, bool (*visitor)(File
     // The current text is made up of the current active pieces
     size_t off = 0;
     list_for_each_member(p, &file->pieces, Piece, list) {
-        if (!visitor(file, off, p->data, p->size, user)) {
-            return false;
+        if (off + p->size >= start) {
+            size_t piece_start = off <= start ? start - off : 0;
+            if (!visitor(file, off + piece_start, p->data + piece_start, p->size - piece_start, user)) {
+                return false;
+            }
         }
         off += p->size;
     }

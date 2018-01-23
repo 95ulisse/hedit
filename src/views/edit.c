@@ -72,6 +72,14 @@ static bool file_visitor(File* f, size_t offset, const unsigned char* data, size
     assert(offset == s->nextbyte);
     size_t nextbyte = offset;
 
+    // If this invocation of the visitor should draw the last byte, increment the len by adding "virtual" byte
+    // that will be rendered as whitespace just to allow the cursor to go beyond the end of the file
+    bool hasvirtualbyte = false;
+    if (offset + len == hedit_file_size(f)) {
+        len++;
+        hasvirtualbyte = true;
+    }
+
     /**
      * We want to draw each line like this:
      * 
@@ -85,6 +93,8 @@ static bool file_visitor(File* f, size_t offset, const unsigned char* data, size
 
     int i;
     for (i = 0; i < len; i++) {
+
+        bool isvirtualbyte = offset + i == hedit_file_size(f);
 
         // If we are at the beginning of a line, print the line offset
         if (nextbyte % s->colwidth == 0) {
@@ -115,7 +125,12 @@ static bool file_visitor(File* f, size_t offset, const unsigned char* data, size
         }
 
         char buf[3];
-        snprintf(buf, 3, "%02x", data[i]);
+        if (isvirtualbyte) {
+            buf[0] = buf[1] = ' '; // Spaces for the virtual byte at the end of the file
+            buf[2] = '\0';
+        } else {
+            snprintf(buf, 3, "%02x", data[i]);
+        }
         tickit_renderbuffer_text(s->rb, " ");
         if (nextbyte == s->view_state->cursor_pos) {
             if (s->view_state->left) {
@@ -142,6 +157,11 @@ static bool file_visitor(File* f, size_t offset, const unsigned char* data, size
         ascii_spacing +                                  // A bit of spacing
         skip);
     for (int j = len - (lastlinechars == 0 ? MIN(len, s->colwidth) : lastlinechars); j < len; j++) {
+        if (hasvirtualbyte && j == len - 1) {
+            // If this invocation of the visitor has drawn the last byte, it means that we also inserted the "virtual" byte,
+            // but we don't want to draw any ASCII representation for that byte
+            break;
+        }
         if (s->view_state->cursor_pos == offset + j) {
             WITH_HIGHLIGHT2_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
         } else {
@@ -209,7 +229,7 @@ static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
         case HEDIT_MOVEMENT_RIGHT:
             if (state->left) {
                 state->left = false;
-            } else if (state->cursor_pos < hedit_file_size(hedit->file) - 1) {
+            } else if (state->cursor_pos < hedit_file_size(hedit->file)) {
                 state->cursor_pos++;
                 state->left = true;
             }
@@ -220,7 +240,7 @@ static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
             }
             break;
         case HEDIT_MOVEMENT_DOWN:
-            if (state->cursor_pos + colwidth < hedit_file_size(hedit->file)) {
+            if (state->cursor_pos + colwidth <= hedit_file_size(hedit->file)) {
                 state->cursor_pos = state->cursor_pos + colwidth;
             }
             break;
@@ -229,7 +249,7 @@ static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
             state->left = true;
             break;
         case HEDIT_MOVEMENT_LINE_END:
-            state->cursor_pos = MIN(state->cursor_pos + colwidth - (state->cursor_pos % colwidth) - 1, hedit_file_size(hedit->file) - 1);
+            state->cursor_pos = MIN(state->cursor_pos + colwidth - (state->cursor_pos % colwidth) - 1, hedit_file_size(hedit->file));
             state->left = false;
             break;
         case HEDIT_MOVEMENT_PAGE_UP:
@@ -240,10 +260,10 @@ static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
             }
             break;
         case HEDIT_MOVEMENT_PAGE_DOWN:
-            if (state->cursor_pos + pagesize < hedit_file_size(hedit->file) - 1) {
+            if (state->cursor_pos + pagesize < hedit_file_size(hedit->file)) {
                 state->cursor_pos += pagesize;
             } else {
-                state->cursor_pos = hedit_file_size(hedit->file) - 1;
+                state->cursor_pos = hedit_file_size(hedit->file);
             }
             break;
         case HEDIT_MOVEMENT_ABSOLUTE:
@@ -254,6 +274,11 @@ static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
         default:
             log_warn("Unknown movement: %d", m);
             return;
+    }
+
+    // If the cursor went beyond the last byte, keep it always on the left
+    if (state->cursor_pos == hedit_file_size(hedit->file)) {
+        state->left = true;
     }
 
     // Scroll so that the cursor is always visible
@@ -282,7 +307,9 @@ static void on_input(HEdit* hedit, const char* key, bool replace) {
 
         // Update the digit under the cursor
         unsigned char byte = 0;
-        assert(hedit_file_read_byte(hedit->file, state->cursor_pos, &byte));
+        if (!hedit_file_read_byte(hedit->file, state->cursor_pos, &byte)) {
+            return;
+        }
         if (state->left) {
             byte = 16 * keyvalue + (byte % 16);
         } else {
