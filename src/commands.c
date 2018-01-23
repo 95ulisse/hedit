@@ -35,7 +35,7 @@ static bool quit(HEdit* hedit, bool force, ArgIterator* args) {
     return true;
 }
 
-static bool open(HEdit* hedit, bool force, ArgIterator* args) {
+static bool edit(HEdit* hedit, bool force, ArgIterator* args) {
 
     if (hedit->file != NULL) {
         log_error("Another file is already opened.");
@@ -44,7 +44,7 @@ static bool open(HEdit* hedit, bool force, ArgIterator* args) {
 
     char* path = it_next(args);
     if (path == NULL) {
-        log_error(":open requires path of file to open.");
+        log_error(":edit requires path of file to open.");
         return false;
     }
 
@@ -161,7 +161,7 @@ bool hedit_init_commands() {
     // Ignores the function pointer <-> void* cast warning.
 #pragma GCC diagnostic ignored "-Wpedantic"
     REG2(quit, q);
-    REG2(open, o);
+    REG2(edit, e);
     REG(close);
     REG2(write, w);
     REG(wq);

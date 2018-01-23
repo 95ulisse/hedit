@@ -8,7 +8,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
     // Draw a simple splash screen with the name and the instructions to get started
 
     const char* msg1 = "Welcome to HEdit!";
-    const char* msg2 = "Type :o to open a file and get started.";
+    const char* msg2 = "Type :edit or :e to open a file and get started.";
     const int msg1len = strlen(msg1);
     const int msg2len = strlen(msg2);
     const int paddingv = 1;

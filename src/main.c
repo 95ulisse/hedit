@@ -38,7 +38,7 @@ static int do_open_file(Tickit *t, TickitEventFlags flags, void *user) {
     HEdit* hedit = user;
     
     const char* path = hedit->cli_options->file;
-    tickit_term_input_push_bytes(tickit_get_term(t), ":open ", 6);
+    tickit_term_input_push_bytes(tickit_get_term(t), ":edit ", 6);
     tickit_term_input_push_bytes(tickit_get_term(t), path, strlen(path));
     
     TickitKeyEventInfo e = {
@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
     tickit_later(tickit, 0, do_register_sigint, hedit);
     tickit_later(tickit, 0, on_tickit_ready, hedit);
 
-    // If a file name has been passed on the command line, issue an :open command
+    // If a file name has been passed on the command line, issue an :edit command
     if (options.file != NULL) {
         tickit_later(tickit, 0, do_open_file, hedit);
     }

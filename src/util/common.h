@@ -19,6 +19,18 @@
         __a > __b ? __a : __b; \
     })
 
+#ifndef offsetof
+#define offsetof(type, member) ((size_t) &((type*) 0)->member)
+#endif
+
+#ifndef container_of
+#define container_of(ptr, type, member) \
+    __extension__({ \
+	    void* __mptr = (void*)(ptr); \
+	    ((type*) (__mptr - offsetof(type, member))); \
+    })
+#endif
+
 static inline bool str2int(const char* s, int base, int* out) {
     char *end;
     if (s[0] == '\0' || isspace((unsigned char) s[0]))

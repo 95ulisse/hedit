@@ -18,7 +18,8 @@ typedef struct HEdit HEdit;
 
 enum Modes {
     HEDIT_MODE_NORMAL = 1,
-    HEDIT_MODE_OVERWRITE,
+    HEDIT_MODE_INSERT,
+    HEDIT_MODE_REPLACE,
     HEDIT_MODE_COMMAND, // Text editing of the command line after pressing ':'
     HEDIT_MODE_MAX
 };
@@ -76,6 +77,7 @@ enum Movement {
     HEDIT_MOVEMENT_LINE_END,
     HEDIT_MOVEMENT_PAGE_UP,
     HEDIT_MOVEMENT_PAGE_DOWN,
+    HEDIT_MOVEMENT_ABSOLUTE
 };
 
 /**
@@ -88,8 +90,8 @@ struct View {
     bool (*on_enter)(HEdit* hedit, View* prev);
     bool (*on_exit)(HEdit* hedit, View* next);
     void (*on_draw)(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e);
-    void (*on_input)(HEdit* hedit, const char* key);
-    void (*on_movement)(HEdit* hedit, enum Movement m);
+    void (*on_input)(HEdit* hedit, const char* key, bool replace);
+    void (*on_movement)(HEdit* hedit, enum Movement m, size_t arg);
 };
 
 /** Global definition of all the available views. */

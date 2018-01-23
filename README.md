@@ -18,7 +18,7 @@ The build output is in the `out` folder.
 
 ## Roadmap
 
-- [ ] Undo/Redo
+- [x] Undo/Redo
 - [ ] Syntax highlighting
 - [ ] Scriptability
 - [ ] Structure view

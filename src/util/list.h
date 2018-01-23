@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include "util/common.h"
+
 struct list_head {
     struct list_head* next;
     struct list_head* prev;
@@ -73,18 +75,21 @@ static inline void list_del(struct list_head* item) {
 }
 
 
-#ifndef offsetof
-#define offsetof(type, member) ((size_t) &((type*) 0)->member)
-#endif
+/** Returns the next item in a linked list. **/
+#define list_next(el, type, member) \
+    container_of((el)->member.next, type, member)
 
-#ifndef container_of
-#define container_of(ptr, type, member) \
-    __extension__({ \
-	    void* __mptr = (void*)(ptr); \
-	    ((type*) (__mptr - offsetof(type, member))); \
-    })
-#endif
+/** Returns the prev item in a linked list. **/
+#define list_prev(el, type, member) \
+    container_of((el)->member.prev, type, member)
 
+/** Returns the first item of a list, or NULL if the list is empty. */
+#define list_first(head, type, member) \
+    (list_empty(head) ? NULL : container_of((head)->next, type, member))
+
+/** Returns the last item of a list, or NULL if the list is empty. */
+#define list_last(head, type, member) \
+    (list_empty(head) ? NULL : container_of((head)->prev, type, member))
 
 /** Iterate over a list. */
 #define list_for_each(pos, head) \
@@ -109,5 +114,18 @@ static inline void list_del(struct list_head* item) {
     for (type *pos = container_of((head)->prev, type, member), *__n = container_of(pos->member.prev, type, member); \
         &pos->member != (head); \
         pos = __n, __n = container_of(pos->member.prev, type, member))
+
+/** Iterate a portion of a list from one node to another. */
+#define list_for_each_interval(pos, from, to, type, member) \
+    for (type *pos = (from), *__n = container_of(pos->member.next, type, member), *__stop = (type*)(pos == (to) ? 1L : 0L); \
+        (long)__stop < 2L; \
+        pos = __n, __n = container_of(pos->member.next, type, member), __stop = (type*)((long)__stop == 1L ? 2L : (pos == (to) ? 1L : 0L)))
+
+/** Iterate a portion of a list from one node to another in the reverse order. */
+#define list_for_each_rev_interval(pos, from, to, type, member) \
+    for (type *pos = (to), *__n = container_of(pos->member.prev, type, member), *__stop = (type*)(pos == (from) ? 1L : 0L); \
+        (long)__stop < 2L; \
+        pos = __n, __n = container_of(pos->member.prev, type, member), __stop = (type*)((long)__stop == 1L ? 2L : (pos == (from) ? 1L : 0L)))
+
 
 #endif

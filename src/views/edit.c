@@ -65,7 +65,7 @@ static inline size_t byte_to_line(struct file_visitor_state* s, size_t offset) {
     return offset / s->colwidth - s->view_state->scroll_lines;
 }
 
-static void file_visitor(File* f, size_t offset, const unsigned char* data, size_t len, void* user) {
+static bool file_visitor(File* f, size_t offset, const unsigned char* data, size_t len, void* user) {
     struct file_visitor_state* s = user;
     const int ascii_spacing = 2;
 
@@ -150,6 +150,7 @@ static void file_visitor(File* f, size_t offset, const unsigned char* data, size
     }
 
     s->nextbyte = nextbyte;
+    return true;
 }
 
 static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
@@ -191,7 +192,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
 
 }
 
-static void on_movement(HEdit* hedit, enum Movement m) {
+static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
     ViewState* state = hedit->viewdata;
     size_t colwidth = ((Option*) map_get(hedit->options, "colwidth"))->value.i;
     size_t pagesize = colwidth * tickit_window_lines(hedit->viewwin);
@@ -245,6 +246,10 @@ static void on_movement(HEdit* hedit, enum Movement m) {
                 state->cursor_pos = hedit_file_size(hedit->file) - 1;
             }
             break;
+        case HEDIT_MOVEMENT_ABSOLUTE:
+            state->cursor_pos = MIN(arg, hedit_file_size(hedit->file));
+            state->left = true;
+            break;
 
         default:
             log_warn("Unknown movement: %d", m);
@@ -263,7 +268,7 @@ static void on_movement(HEdit* hedit, enum Movement m) {
     hedit_redraw_view(hedit);
 }
 
-static void on_input(HEdit* hedit, const char* key) {
+static void on_input(HEdit* hedit, const char* key, bool replace) {
 
     // Accept only hex digits
     int keyvalue = -1;
@@ -271,19 +276,35 @@ static void on_input(HEdit* hedit, const char* key) {
         return;
     }
 
-    // Update the digit under the cursor
     ViewState* state = hedit->viewdata;
-    unsigned char byte = 0;
-    assert(hedit_file_read_byte(hedit->file, state->cursor_pos, &byte));
-    if (state->left) {
-        byte = 16 * keyvalue + (byte % 16);
+
+    if (replace || state->left == false) {
+
+        // Update the digit under the cursor
+        unsigned char byte = 0;
+        assert(hedit_file_read_byte(hedit->file, state->cursor_pos, &byte));
+        if (state->left) {
+            byte = 16 * keyvalue + (byte % 16);
+        } else {
+            byte = (byte - (byte % 16)) + keyvalue;
+        }
+        if (!hedit_file_replace(hedit->file, state->cursor_pos, &byte, 1)) {
+            return;
+        }
+
     } else {
-        byte = (byte - (byte % 16)) + keyvalue;
+
+        // Add a new byte at the left of the cursor
+        unsigned char byte = 16 * keyvalue;
+        if (!hedit_file_insert(hedit->file, state->cursor_pos, &byte, 1)) {
+            return;
+        }
+    
     }
-    hedit_file_write_byte(hedit->file, state->cursor_pos, byte);
+
 
     // Move the cursor to the right
-    on_movement(hedit, HEDIT_MOVEMENT_RIGHT);   
+    on_movement(hedit, HEDIT_MOVEMENT_RIGHT, 0);
 
 }
 

@@ -7,20 +7,435 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <libgen.h>
+#include <assert.h>
 
 #include "file.h"
 #include "util/log.h"
 #include "util/common.h"
+#include "util/list.h"
+
+/**
+ * This is an implementation of a piece chain.
+ * A piece chain is a data structure that allows fast insertion and deletion operations,
+ * and allows for undo/redo and grouping of operations.
+ *
+ * Even though this is an hex editor, we need a way to provide undo and redo,
+ * and this data structure works really well with text, which is just a bunch a bytes.
+ * For the sake of simplicity, during the description of the structure, we will refer
+ * to the contents of a file with the word "text", but the piece chain has nothing
+ * that prevents it from being used to store non-textual data.
+ *
+ * The core idea is to keep the whole text in a linked list of pieces:
+ *
+ * #1                #2        #3
+ * +----------+ ---> +--+ ---> +------+
+ * |This is so|      |me|      | text!|
+ * +----------+ <--- +--+ <--- +------+
+ *
+ * Evey time we make an insertion, we *replace* the pieces that we should modify with new ones.
+ * Pieces are **immutable**, and they are always kept around for undo/redo support (look at the IDs).
+ *
+ * #1                #2        #4           #5                         #6
+ * +----------+ ---> +--+ ---> +-----+ ---> +-------------------+ ---> +-+
+ * |This is so|      |me|      | text|      |, and now some more|      |!|
+ * +----------+ <--- +--+ <--- +-----+ <--- +-------------------+ <--- +-+
+ *
+ * This change is recorded as a pair of spans:
+ * "Replace the span ranging from piece #2 to #3, with the span from #4 to #6."
+ * To undo a change, just swap again the spans.
+ *
+ * When we start with a new file, we start with an empty piece list, but when we open an existing
+ * file, we can mmap it and use its contents as the first piece of the chain. The region can be mapped
+ * read-only, because we will never need to change it (the piece chain is immutable, remember).
+ *
+ * A final note on the management of the memory:
+ * we need some kind of custom allocator, which is able to keep track of which block of memory has been
+ * mmapped and which one has been allocated on the heap, so that we can free them appropriately.
+ * A piece does not own the data, it only has a pointer *inside* a memory block.
+ *
+ * This is an example showing how a new insertion in the middle of an existing file is represented.
+ *
+ * +-----------------------------------+ ---> +--------+
+ * | Original file contents (mmap R/O) |      |new text|                     Memory blocks
+ * +-----------------------------------+ <--- +--------+
+ * ^            ^                             ^
+ * |            |                             |
+ * |            +----------------------+      |
+ * |                 +-----------------|------+
+ * |                 |                 |
+ * +----------+ ---> +----------+ ---> +----------+
+ * | Piece #1 |      | Piece #2 |      | Piece #3 |                          Piece chain
+ * +----------+ <--- +----------+ <--- +----------+
+ *
+ *
+ *
+ * Caching
+ * =======
+ *
+ * While creating a piece is cheap, creating a piece for every single inserted char is a bit excessive,
+ * so we make an exception to the rule: all memory blocks **except the last one** are immutable.
+ * When we insert a new sequence of bytes, we append it to the last allocated memory block,
+ * and then create a piece pointing to that new string.
+ *
+ *
+ *
+ * Undo / Redo
+ * ===========
+ *
+ * This implementation keeps a linear undo history, which means that if you undo a revision and then
+ * modify the text, then the redo history is discarded.
+ *
+ * The whole idea of spans + changes + revisions is to allow simple undoing of changes.
+ * Changes are grouped in revisions, which are just a mean to undo a group of changes together
+ * (think of the replacement of a char as a deletion followed by an insertion: we don't want to undo
+ * the deletion and the insertion individually, but the replacement as a whole).
+ *
+ * The `all_revisions` list keeps track of all the revisions in the history of the file,
+ * and the `current_revision` is a pointer to the actual active revision. Note that all the changes
+ * the user makes to the file are first stored in the `pending_changes` list, and then committed
+ * to a proper revision either when an undo is requested or manually with the function `hedit_file_commit_revision`.
+ * At this point, the implementation of undo is just a matter of moving the `current_revision` pointer
+ * and repply the changes in the old revision in reverse.
+ *
+ */
+
+#define BLOCK_SIZE (1024 * 1024) /* 1MiB */
+
+typedef struct {
+    unsigned char* data;
+    size_t size;
+    size_t len;
+    enum {
+        BLOCK_MMAP,
+        BLOCK_MALLOC
+    } type;
+    struct list_head list;
+} Block;
+
+typedef struct {
+    unsigned char* data;
+    size_t size;
+    struct list_head global_list;
+    struct list_head list; // This is not used as a list at all, so maybe we should not use a `list_head`.
+} Piece;
+
+typedef struct {
+    Piece* start;
+    Piece* end;
+    size_t len;
+} Span;
+
+typedef struct {
+    Span original;
+    Span replacement;
+    size_t pos;
+    struct list_head list;
+} Change;
+
+typedef struct {
+    struct list_head changes;
+    struct list_head list;
+} Revision;
 
 struct File {
-    unsigned char* mem;
-    size_t size;
     char* name;
     bool ro;
     bool dirty;
+    size_t size;
+
+    struct list_head all_blocks; // List of all the blocks (for freeing)
+    struct list_head all_pieces; // List of all the pieces (for freeing)
+    struct list_head all_revisions; // File history
+
+    struct list_head pieces; // Current active pieces
+
+    Revision* current_revision; // Pointer to the current active revision
+    struct list_head pending_changes; // Changes not yet attached to a revision
 };
 
+
+// Functions to manage blocks
+static Block* block_alloc(File*, size_t);
+static Block* block_alloc_mmap(File*, int fd, size_t size);
+static void block_free(File*, Block*);
+static bool block_can_fit(Block*, size_t len);
+static unsigned char* block_append(Block*, const unsigned char* data, size_t len);
+
+// Functions to manage pieces
+static Piece* piece_alloc(File*);
+static void piece_free(Piece*);
+static bool piece_find(File*, size_t abs, Piece** piece, size_t* offset);
+
+// Functions to manage spans and changes
+static void span_init(Span*, Piece* start, Piece* end);
+static void span_swap(File*, Span* original, Span* replacement);
+static Change* change_alloc(File*, size_t pos);
+static void change_free(Change*, bool free_pieces);
+
+// Functions to manage revisions
+static Revision* revision_alloc(File*);
+static void revision_free(Revision*, bool free_pieces);
+static bool revision_purge(File*);
+
+
+static Block* block_alloc(File* file, size_t size) {
+    
+    Block* block = malloc(sizeof(Block));
+    if (block == NULL) {
+        log_fatal("Out of memory.");
+        return NULL;
+    }
+    block->size = MAX(size, BLOCK_SIZE);
+    block->len = 0;
+    block->type = BLOCK_MALLOC;
+    list_init(&block->list);
+
+    block->data = malloc(sizeof(char) * block->size);
+    if (block->data == NULL) {
+        log_fatal("Out of memory.");
+        free(block);
+        return NULL;
+    }
+
+    // Add the created block to the list of all blocks for tracking
+    list_add_tail(&file->all_blocks, &block->list);
+
+    return block;
+
+}
+
+static Block* block_alloc_mmap(File* file, int fd, size_t size) {
+    
+    Block* block = malloc(sizeof(Block));
+    if (block == NULL) {
+        log_fatal("Out of memory.");
+        return NULL;
+    }
+    block->size = size;
+    block->len = size;
+    block->type = BLOCK_MMAP;
+    list_init(&block->list);
+
+    block->data = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (block->data == MAP_FAILED) {
+        log_error("Cannot mmap: %s.", strerror(errno));
+        return NULL;
+    }
+
+    // Add the created block to the list of all blocks for tracking
+    list_add_tail(&file->all_blocks, &block->list);
+
+    return block;
+   
+}
+
+static void block_free(File* file, Block* block) {
+    switch (block->type) {
+        case BLOCK_MALLOC:
+            free(block->data);
+            break;
+        case BLOCK_MMAP:
+            munmap(block->data, block->size);
+            break;
+        default:
+            abort();
+    }
+    list_del(&block->list);
+    free(block);
+}
+
+static bool block_can_fit(Block* block, size_t n) {
+    return block->size - block->len >= n;
+}
+
+static unsigned char* block_append(Block* block, const unsigned char* data, size_t len) {
+    if (!block_can_fit(block, len)) {
+        return NULL;
+    }
+    unsigned char* ptr = block->data + block->len;
+    memmove(ptr, data, len);
+    block->len += len;
+    return ptr;
+}
+
+static Piece* piece_alloc(File* file) {
+    Piece* piece = malloc(sizeof(Piece));
+    if (piece == NULL) {
+        log_fatal("Out of memory.");
+        return NULL;
+    }
+    piece->data = NULL;
+    piece->size = 0;
+    list_init(&piece->list);
+    list_init(&piece->global_list);
+
+    list_add_tail(&file->all_pieces, &piece->global_list);
+
+    return piece;
+}
+
+static void piece_free(Piece* piece) {
+    list_del(&piece->global_list);
+    free(piece);
+}
+
+static bool piece_find(File* file, size_t abs, Piece** piece, size_t* offset) {
+    if (abs > file->size) {
+        return false;
+    }
+
+    size_t abspos = 0;
+    list_for_each_member(p, &file->pieces, Piece, list) {
+        if (abs < abspos + p->size) {
+            *piece = p;
+            *offset = abs - abspos;
+            return true;
+        } else {
+            abspos += p->size;
+        }
+    }
+
+    return false;
+}
+
+static void span_init(Span* span, Piece* start, Piece* end) {
+    span->start = start;
+    span->end = end;
+    if (start == NULL && end == NULL) {
+        span->len = 0;
+        return;
+    }
+    assert(start != NULL && end != NULL);
+
+    list_for_each_interval(p, start, end, Piece, list) {
+        span->len += p->size;
+    }
+}
+
+static void span_swap(File* file, Span* original, Span* replacement) {
+    if (original->len == 0 && replacement->len == 0) {
+        return;
+    } else if (original->len == 0) {
+        // An insertion
+        replacement->start->list.prev->next = &replacement->start->list;
+        replacement->end->list.next->prev = &replacement->end->list;
+    } else if (replacement->len == 0) {
+        // A deletion
+        original->start->list.prev->next = original->end->list.next;
+        original->end->list.next->prev = original->start->list.prev;
+    } else {
+        original->start->list.prev->next = &replacement->start->list;
+        original->end->list.next->prev = &replacement->end->list;
+    }
+    file->size -= original->len;
+    file->size += replacement->len;
+}
+
+static Change* change_alloc(File* file, size_t pos) {
+    Change* change = malloc(sizeof(Change));
+    if (change == NULL) {
+        log_fatal("Out of memory.");
+        return NULL;
+    }
+    change->pos = pos;
+    span_init(&change->original, NULL, NULL);
+    span_init(&change->replacement, NULL, NULL);
+
+    list_add_tail(&file->pending_changes, &change->list);
+    return change;
+}
+
+static void change_free(Change* change, bool free_pieces) {
+    // We don't need to free the pieces of the original span, since they will be referenced by a previous change
+    if (free_pieces && change->replacement.start != NULL) {
+        list_for_each_interval(p, change->replacement.start, change->replacement.end, Piece, list) {
+            piece_free(p);
+        }
+    }
+    free(change);
+}
+
+static Revision* revision_alloc(File* file) {
+    Revision* rev = malloc(sizeof(Revision));
+    if (rev == NULL) {
+        log_fatal("Out of memory.");
+        return NULL;
+    }
+    list_init(&rev->changes);
+    list_init(&rev->list);
+
+    list_add_tail(&file->all_revisions, &rev->list);
+
+    return rev;
+}
+
+static void revision_free(Revision* rev, bool free_pieces) {
+    list_for_each_rev_member(change, &rev->changes, Change, list) {
+        change_free(change, free_pieces);
+    }
+    free(rev);
+}
+
+static bool revision_purge(File* file) {
+
+    // The history of revisions is linear:
+    // If you undo a change, than perform a new operation, you cannot redo to the original state.
+    // This function purges any revision after the current active one:
+    // in other words, discards redo history.
+
+    if (list_empty(&file->all_revisions)) {
+        // No revision committed yet
+        return false;
+    }
+
+    if (list_last(&file->all_revisions, Revision, list) == file->current_revision) {
+        // We are already at the last revision
+        return false;
+    }
+
+    list_for_each_rev_interval(rev, list_next(file->current_revision, Revision, list), list_last(&file->all_revisions, Revision, list), Revision, list) {
+        list_del(&rev->list);
+        revision_free(rev, true);
+    }
+
+    assert(file->current_revision == list_last(&file->all_revisions, Revision, list));
+
+    return true;
+}
+
 File* hedit_file_open(const char* path) {
+
+    // Initialize a new File structure
+    File* file = calloc(1, sizeof(File));
+    if (file == NULL) {
+        log_fatal("Out of memory.");
+        return NULL;
+    }
+    list_init(&file->all_blocks);
+    list_init(&file->all_revisions);
+    list_init(&file->all_pieces);
+    list_init(&file->pieces);
+    list_init(&file->pending_changes);
+
+    if (path == NULL) {
+
+        // Allocate an initial empty revision
+        Revision* initial_rev = revision_alloc(file);
+        if (initial_rev == NULL) {
+            free(file);
+            return NULL;
+        }
+        file->current_revision = initial_rev;
+
+        return file;
+    }
+
+    // Store the file name
+    if ((file->name = strdup(path)) == NULL) {
+        log_fatal("Out of memory.");
+        hedit_file_close(file);
+        return NULL;
+    }
 
     // Open the file r/w, if we fail try r/o
     int fd;
@@ -36,50 +451,61 @@ File* hedit_file_open(const char* path) {
             while ((fd = open(path, O_RDONLY)) == -1 && errno == EINTR);
             if (errno != 0) {
                 log_error("Cannot open %s: %s.", path, strerror(errno));
+                hedit_file_close(file);
                 return NULL;
             }
             ro = true;
             break;
         default:
             log_error("Cannot open %s: %s.", path, strerror(errno));
+            hedit_file_close(file);
             return NULL;
     }
+    file->ro = ro;
 
     // Stat the file to get the size
     struct stat s;
     if (fstat(fd, &s) < 0) {
         log_error("Cannot stat %s: %s.", path, strerror(errno));
         close(fd);
+        hedit_file_close(file);
         return NULL;
     }
 
-    // mmap the file to memory
-    void* mem = mmap(NULL, s.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    if (mem == MAP_FAILED) {
-        log_error("Cannot mmap %s: %s.", path, strerror(errno));
+    // mmap the file to memory and create the initial piece
+    Block* b = block_alloc_mmap(file, fd, s.st_size);
+    if (b == NULL) {
         close(fd);
+        hedit_file_close(file);
         return NULL;
     }
-
+    Piece* p = piece_alloc(file);
+    if (p == NULL) {
+        close(fd);
+        hedit_file_close(file);
+        return NULL;
+    }
+    p->data = b->data;
+    p->size = b->size;
+    p->list.prev = &file->pieces;
+    p->list.next = &file->pieces;
+    
     // Now that we have the file mapped in memory, we can safely close the fd
     close(fd);
 
-    // Initialize a new File structure
-    File* file = malloc(sizeof(File));
-    if (file == NULL) {
-        log_fatal("Cannot allocate memory for File structure.");
-        munmap(mem, s.st_size);
+    // Prepare the initial change
+    Change* change = change_alloc(file, 0);
+    if (change == NULL) {
+        hedit_file_close(file);
         return NULL;
     }
-    file->mem = mem;
-    file->size = s.st_size;
-    file->ro = ro;
-    file->dirty = false;
+    span_init(&change->original, NULL, NULL);
+    span_init(&change->replacement, p, p);
+    span_swap(file, &change->original, &change->replacement);
 
-    if ((file->name = strdup(path)) == NULL) {
-        log_fatal("Cannot allocate memory for File structure.");
-        munmap(mem, s.st_size);
-        free(file);
+    // Commit the change to a revision
+    if (!hedit_file_commit_revision(file)) {
+        hedit_file_close(file);
         return NULL;
     }
 
@@ -94,14 +520,34 @@ void hedit_file_close(File* file) {
         return;
     }
 
-    log_debug("File closed: %s.", file->name);
+    log_debug("Closing file: %s.", file->name);
 
-    munmap(file->mem, file->size);
-    free(file->name);
+    hedit_file_commit_revision(file); // Commits any pending change
+
+    list_for_each_rev_member(rev, &file->all_revisions, Revision, list) {
+        // Note: here we are freeing revisions and changes, but not pieces.
+        // This is because we are going to free all the pieces later,
+        // and if we free some pieces without a proper undo, we end up with
+        // a screwed chain.
+        revision_free(rev, false);
+    }
+
+    list_for_each_rev_member(p, &file->all_pieces, Piece, global_list) {
+        piece_free(p);
+    }
+
+    list_for_each_rev_member(b, &file->all_blocks, Block, list) {
+        block_free(file, b);
+    }
+
+    if (file->name != NULL) {
+        free(file->name);
+    }
+
     free(file);
 }
 
-static bool hedit_file_set_name(File* file, const char* name) {
+static bool set_name(File* file, const char* name) {
     
     // Switch the old file name with the new one
     char* dup = strdup(name);
@@ -113,6 +559,28 @@ static bool hedit_file_set_name(File* file, const char* name) {
     file->name = dup;
 
     return true;
+}
+
+static bool write_to_fd_visitor(File* file, size_t unused, const unsigned char* data, size_t len, void* user) {
+    int fd = (int)(long) user;
+
+    const size_t blocksize = 64 * 1024;
+    size_t offset = 0;
+    while (offset < len) {
+        ssize_t written;
+        while ((written = write(fd, data + offset, MIN(blocksize, len - offset))) == -1 && errno == EINTR);
+        if (written < 0) {
+            log_error("Cannot write: %s.", strerror(errno));
+            return false;
+        }
+        offset += written;
+    }
+
+    return true;
+}
+
+static bool write_to_fd(File* file, int fd) {
+    return hedit_file_visit(file, 0, file->size, write_to_fd_visitor, (void*)(long) fd);
 }
 
 static bool hedit_file_save_atomic(File* file, const char* path) {
@@ -191,18 +659,10 @@ static bool hedit_file_save_atomic(File* file, const char* path) {
     }
 
     // Write to the temp file
-    const size_t blocksize = 64 * 1024;
-    size_t offset = 0;
-    while (offset < file->size) {
-        ssize_t written;
-        while ((written = write(tmpfd, file->mem + offset, MIN(blocksize, file->size - offset))) == -1 && errno == EINTR);
-        if (written < 0) {
-            log_error("Cannot write to %s: %s.", tmpname, strerror(errno));
-            goto error;
-        }
-        offset += written;
+    if (!write_to_fd(file, tmpfd)) {
+        goto error;
     }
-
+    
     while ((res = fsync(tmpfd)) == -1 && errno == EINTR);
     if (res < 0) {
         log_error("Cannot fsync %s: %s.", tmpname, strerror(errno));
@@ -238,7 +698,7 @@ static bool hedit_file_save_atomic(File* file, const char* path) {
     free(tmpname);
     free(pathdup);
     log_debug("Saved atomically: %s.", path);
-    return hedit_file_set_name(file, path);
+    return set_name(file, path);
 
 error:
     if (oldfd != -1) {
@@ -270,17 +730,9 @@ static bool hedit_file_save_inplace(File* file, const char* path) {
         return false;
     }
 
-    const size_t blocksize = 64 * 1024;
-    size_t offset = 0;
-    while (offset < file->size) {
-        ssize_t written;
-        while ((written = write(fd, file->mem + offset, MIN(blocksize, file->size - offset))) == -1 && errno == EINTR);
-        if (written < 0) {
-            log_error("Cannot write to %s: %s.", path, strerror(errno));
-            close(fd);
-            return false;
-        }
-        offset += written;
+    if (!write_to_fd(file, fd)) {
+        close(fd);
+        return false;
     }
 
     int res;
@@ -294,7 +746,7 @@ static bool hedit_file_save_inplace(File* file, const char* path) {
     close(fd);
 
     log_debug("Saved in place: %s.", path);
-    return hedit_file_set_name(file, path);
+    return set_name(file, path);
 
 }
 
@@ -346,38 +798,302 @@ bool hedit_file_is_dirty(File* file) {
     return file->dirty;
 }
 
-bool hedit_file_write_byte(File* file, size_t offset, unsigned char byte) {
-    
-    // Bounds check
-    if (offset >= file->size) {
-        log_error("Write out of bounds.");
+bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, size_t len) {
+
+    if (len == 0) {
+        return true;
+    }
+    if (offset > file->size) {
         return false;
     }
 
-    file->mem[offset] = byte;
+    // Find the piece at offset `offset`
+    Piece* piece;
+    size_t piece_offset;
+    if (!piece_find(file, offset, &piece, &piece_offset)) {
+        if (offset == file->size) {
+            piece = list_last(&file->pieces, Piece, list);
+            piece_offset = piece->size;
+        } else {
+            return false;
+        }
+    }
+    assert(piece != NULL);
+
+    // Discard any redo history
+    revision_purge(file);
+
+    // Let's see if we can reuse the last block to store the new data
+    Block* b;
+    if (!list_empty(&file->all_blocks) && block_can_fit(list_last(&file->all_blocks, Block, list), len)) {
+        b = list_last(&file->all_blocks, Block, list);
+    } else {
+        b = block_alloc(file, len);
+        if (b == NULL) {
+            return false;
+        }
+    }
+
+    unsigned char* ptr = block_append(b, data, len);
+    if (ptr == NULL) {
+        return false;
+    }
+
+    // There might be two cases for insertion, depending on the offset:
+    // - At the boundary of an already existing piece
+    // - In the middle of an existing piece
+    // In the first case, we can just allocate a new piece and insert it,
+    // while in the other we have to replace the existing piece with three new ones.
+
+    Change* change = change_alloc(file, offset);
+    if (change == NULL) {
+        return false;
+    }
+
+    if (piece_offset == 0 || piece_offset == piece->size) {
+        // For how we counted offsets, the only way that the `piece_offset == piece->size` condition
+        // can be true is when we are inserting at the end of the file.
+
+        Piece* new = piece_alloc(file);
+        if (new == NULL) {
+            return false;
+        }
+        new->data = ptr;
+        new->size = len;
+
+        // Insert before or after the piece
+        if (piece_offset == 0) {
+            new->list.prev = piece->list.prev;
+            new->list.next = &piece->list;
+        } else {
+            new->list.prev = &piece->list;
+            new->list.next = piece->list.next;
+        }
+        
+        span_init(&change->original, NULL, NULL);
+        span_init(&change->replacement, new, new);
+
+    } else {
+
+        Piece* before = piece_alloc(file);
+        Piece* middle = piece_alloc(file);
+        Piece* after = piece_alloc(file);
+        if (before == NULL || middle == NULL || after == NULL) {
+            return false;
+        }
+
+        // Split the data among the three pieces
+        before->data = piece->data;
+        before->size = piece_offset;
+        middle->data = ptr;
+        middle->size = len;
+        after->data = piece->data + piece_offset;
+        after->size = piece->size - piece_offset;
+
+        // Join the three pieces together
+        before->list.prev = piece->list.prev;
+        before->list.next = &middle->list;
+        middle->list.prev = &before->list;
+        middle->list.next = &after->list;
+        after->list.prev = &middle->list;
+        after->list.next = piece->list.next;
+
+        span_init(&change->original, piece, piece);
+        span_init(&change->replacement, before, after);
+    
+    }
+
+    // Apply the prepared change
+    span_swap(file, &change->original, &change->replacement);
     file->dirty = true;
     return true;
+
 }
 
-bool hedit_file_read_byte(File* file, size_t offset, unsigned char* byte) {
-    
-    // Bounds check
-    if (offset >= file->size) {
-        log_error("Read out of bounds.");
+bool hedit_file_delete(File* file, size_t offset, size_t len) {
+
+    if (len == 0) {
+        return true;
+    }
+    if (offset > file->size) {
         return false;
     }
 
-    *byte = file->mem[offset];
+    // Find the piece at the begin of the range to delete
+    Piece* start_piece;
+    size_t start_piece_offset;
+    Piece* end_piece;
+    size_t end_piece_offset;
+    if (!piece_find(file, offset, &start_piece, &start_piece_offset)) {
+        return false;
+    }
+    if (!piece_find(file, offset + len, &end_piece, &end_piece_offset)) {
+        // If the end of the delete range fell out of the file, delete up to the last char
+        end_piece = list_last(&file->pieces, Piece, list);
+        end_piece_offset = end_piece->size;
+    }  
+    assert(start_piece != NULL);
+    assert(end_piece != NULL);
+
+    // Discard any redo history
+    revision_purge(file);
+
+    // Deletion range can both start and end up in the middle of a piece.
+    // This means that we might have to create new pieces to account for the split pieces.
+
+    Change* change = change_alloc(file, offset);
+    if (change == NULL) {
+        return false;
+    }
+
+    bool split_start = start_piece_offset != 0;
+    bool split_end = end_piece_offset != end_piece->size;
+    
+    struct list_head* before = start_piece->list.prev;
+    struct list_head* after = end_piece->list.next;
+
+    Piece* new_start = NULL;
+    Piece* new_end = NULL;
+
+    if (split_start) {
+        new_start = piece_alloc(file);
+        if (new_start == NULL) {
+            return false;
+        }
+        new_start->data = start_piece->data;
+        new_start->size = start_piece_offset;
+        new_start->list.prev = before;
+        new_start->list.next = after;
+    }
+
+    if (split_end) {
+        new_end = piece_alloc(file);
+        if (new_end == NULL) {
+            return false;
+        }
+        new_end->data = end_piece->data + end_piece_offset;
+        new_end->size = end_piece->size - end_piece_offset;
+        new_end->list.prev = before;
+        new_end->list.next = after;
+        if (split_start) {
+            new_end->list.prev = &new_start->list;
+            new_start->list.next = &new_end->list;
+        }
+    }
+
+    if (new_start == NULL && new_end != NULL) {
+        new_start = new_end;
+    } else if (new_start != NULL && new_end == NULL) {
+        new_end = new_start;
+    }
+
+    span_init(&change->original, start_piece, end_piece);
+    span_init(&change->replacement, new_start, new_end);
+    span_swap(file, &change->original, &change->replacement);
+
+    file->dirty = true;
+    return true;
+
+}
+
+bool hedit_file_replace(File* file, size_t offset, const unsigned char* data, size_t len) {
+    // A replacement is just a convenience shortcut for insertion and deletion
+    if (hedit_file_delete(file, offset, len)) {
+        return hedit_file_insert(file, offset, data, len);
+    } else {
+        return false;
+    }
+}
+
+bool hedit_file_commit_revision(File* file) {
+
+    // Allocate a new revision only if there are pending changes not yet committed
+    if (!list_empty(&file->pending_changes)) {
+        Revision* rev = revision_alloc(file);
+        if (rev == NULL) {
+            return false;
+        }
+        file->current_revision = rev;
+        
+        // Move the changes from the temporary list to the revision
+        rev->changes.next = file->pending_changes.next;
+        rev->changes.prev = file->pending_changes.prev;
+        file->pending_changes.next->prev = &rev->changes;
+        file->pending_changes.prev->next = &rev->changes;
+        list_init(&file->pending_changes);
+    }
+
     return true;
 }
 
-void hedit_file_visit(File* file, size_t start, size_t len, void (*visitor)(File*, size_t offset, const unsigned char* data, size_t len, void* user), void* user) {
+bool hedit_file_undo(File* file, size_t* pos) {
 
-    if (start >= file->size || len <= 0) {
-        return;
+    // Commit any pending change
+    if (!hedit_file_commit_revision(file)) {
+        return false;
     }
 
-    // We only have a single segment, so call the visitor right away
-    visitor(file, start, file->mem + start, MIN(file->size - start, len), user);
+    if (list_first(&file->all_revisions, Revision, list) == file->current_revision) {
+        return false;
+    }
 
+    // Revert all the changes in the last revision
+    list_for_each_rev_member(c, &file->current_revision->changes, Change, list) {
+        span_swap(file, &c->replacement, &c->original);
+        *pos = c->pos;
+    }
+    file->current_revision = list_prev(file->current_revision, Revision, list);
+    return true;
+
+}
+
+bool hedit_file_redo(File* file, size_t* pos) {
+    
+    // Commit any pending change
+    if (!hedit_file_commit_revision(file)) {
+        return false;
+    }
+
+    // Exit if there's nothing to redo
+    if (list_last(&file->all_revisions, Revision, list) == file->current_revision) {
+        return false;
+    }
+
+    // Reapply the changes in the revision
+    Revision* rev = list_next(file->current_revision, Revision, list);
+    list_for_each_member(c, &rev->changes, Change, list) {
+        span_swap(file, &c->original, &c->replacement);
+        *pos = c->pos;
+    }
+    file->current_revision = rev;
+    return true;
+
+}
+
+bool hedit_file_read_byte(File* file, size_t offset, unsigned char* out) {
+    Piece* p;
+    size_t p_offset;
+    if (!piece_find(file, offset, &p, &p_offset)) {
+        return false;
+    }
+
+    *out = p->data[p_offset];
+    return true;
+}
+
+bool hedit_file_visit(File* file, size_t start, size_t len, bool (*visitor)(File*, size_t offset, const unsigned char* data, size_t len, void* user), void* user) {
+    if (start >= file->size || len == 0) {
+        return true;
+    }
+
+    // The current text is made up of the current active pieces
+    size_t off = 0;
+    list_for_each_member(p, &file->pieces, Piece, list) {
+        if (!visitor(file, off, p->data, p->size, user)) {
+            return false;
+        }
+        off += p->size;
+    }
+
+    return true;
 }

@@ -46,13 +46,42 @@ static void mode_command_on_input(HEdit* hedit, const char* key) {
 
 }
 
-static void mode_overwrite_on_input(HEdit* hedit, const char* key) {
+static void mode_insert_on_input(HEdit* hedit, const char* key) {
     
     // Delegate to the current active view
     if (hedit->view->on_input != NULL) {
-        hedit->view->on_input(hedit, key);
+        hedit->view->on_input(hedit, key, false);
     }
 
+}
+
+static bool mode_insert_on_exit(HEdit* hedit, Mode* next) {
+
+    // Add a new revision to the file being edited
+    if (hedit->file != NULL) {
+        hedit_file_commit_revision(hedit->file);
+    }
+
+    return true;
+}
+
+static void mode_replace_on_input(HEdit* hedit, const char* key) {
+    
+    // Delegate to the current active view
+    if (hedit->view->on_input != NULL) {
+        hedit->view->on_input(hedit, key, true);
+    }
+
+}
+
+static bool mode_replace_on_exit(HEdit* hedit, Mode* next) {
+
+    // Add a new revision to the file being edited
+    if (hedit->file != NULL) {
+        hedit_file_commit_revision(hedit->file);
+    }
+
+    return true;
 }
 
 Mode hedit_modes[] = {
@@ -64,12 +93,22 @@ Mode hedit_modes[] = {
         .bindings = NULL
     },
 
-    [HEDIT_MODE_OVERWRITE] = {
-        .id = HEDIT_MODE_OVERWRITE,
-        .name = "OVERWRITE",
-        .display_name = "OVERWRITE",
+    [HEDIT_MODE_INSERT] = {
+        .id = HEDIT_MODE_INSERT,
+        .name = "INSERT",
+        .display_name = "INSERT",
         .bindings = NULL,
-        .on_input = mode_overwrite_on_input
+        .on_input = mode_insert_on_input,
+        .on_exit = mode_insert_on_exit
+    },
+
+    [HEDIT_MODE_REPLACE] = {
+        .id = HEDIT_MODE_REPLACE,
+        .name = "REPLACE",
+        .display_name = "REPLACE",
+        .bindings = NULL,
+        .on_input = mode_replace_on_input,
+        .on_exit = mode_replace_on_exit
     },
 
     [HEDIT_MODE_COMMAND] = {

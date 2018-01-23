@@ -18,7 +18,8 @@ enum Actions {
 
     // Mode switch
     HEDIT_ACTION_MODE_NORMAL = 1,
-    HEDIT_ACTION_MODE_OVERWRITE,
+    HEDIT_ACTION_MODE_INSERT,
+    HEDIT_ACTION_MODE_REPLACE,
     HEDIT_ACTION_MODE_COMMAND,
 
     // Cursor movement
@@ -30,6 +31,10 @@ enum Actions {
     HEDIT_ACTION_MOVEMENT_LINE_END,
     HEDIT_ACTION_MOVEMENT_PAGE_UP,
     HEDIT_ACTION_MOVEMENT_PAGE_DOWN,
+
+    // Editing commands
+    HEDIT_ACTION_UNDO,
+    HEDIT_ACTION_REDO,
 
     // Command line editing
     HEDIT_ACTION_COMMAND_MOVE_LEFT,

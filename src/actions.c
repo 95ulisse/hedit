@@ -14,7 +14,31 @@ static void switch_mode(HEdit* hedit, const Value* arg) {
 
 static void movement(HEdit* hedit, const Value* arg) {
     if (hedit->view->on_movement != NULL) {
-        hedit->view->on_movement(hedit, (enum Movement) arg->i);
+        hedit->view->on_movement(hedit, (enum Movement) arg->i, 0);
+    }
+}
+
+static void undo(HEdit* hedit, const Value* arg) {
+    if (hedit->file != NULL) {
+        size_t pos;
+        if (hedit_file_undo(hedit->file, &pos)) {
+            if (hedit->view->on_movement != NULL) {
+                hedit->view->on_movement(hedit, HEDIT_MOVEMENT_ABSOLUTE, pos);
+            }
+            hedit_redraw_view(hedit);
+        }
+    }
+}
+
+static void redo(HEdit* hedit, const Value* arg) {
+    if (hedit->file != NULL) {
+        size_t pos;
+        if (hedit_file_redo(hedit->file, &pos)) {
+            if (hedit->view->on_movement != NULL) {
+                hedit->view->on_movement(hedit, HEDIT_MOVEMENT_ABSOLUTE, pos);
+            }
+            hedit_redraw_view(hedit);
+        }
     }
 }
 
@@ -55,9 +79,13 @@ const Action hedit_actions[] = {
         switch_mode,
         { .i = HEDIT_MODE_NORMAL }
     },
-    [HEDIT_ACTION_MODE_OVERWRITE] = {
+    [HEDIT_ACTION_MODE_INSERT] = {
         switch_mode,
-        { .i = HEDIT_MODE_OVERWRITE }
+        { .i = HEDIT_MODE_INSERT }
+    },
+    [HEDIT_ACTION_MODE_REPLACE] = {
+        switch_mode,
+        { .i = HEDIT_MODE_REPLACE }
     },
     [HEDIT_ACTION_MODE_COMMAND] = {
         switch_mode,
@@ -96,6 +124,14 @@ const Action hedit_actions[] = {
     [HEDIT_ACTION_MOVEMENT_PAGE_DOWN] = {
         movement,
         { .i = HEDIT_MOVEMENT_PAGE_DOWN }
+    },
+
+    // Editing commands
+    [HEDIT_ACTION_UNDO] = {
+        undo
+    },
+    [HEDIT_ACTION_REDO] = {
+        redo
     },
 
     // Command line editing
@@ -141,8 +177,11 @@ typedef struct {
 static const KeyBinding* bindings[] = {
 
     [HEDIT_MODE_NORMAL] = (const KeyBinding[]){
-        { "i",               ACTION(MODE_OVERWRITE)      },
+        { "i",               ACTION(MODE_INSERT)         },
+        { "R",               ACTION(MODE_REPLACE)        },
         { ":",               ACTION(MODE_COMMAND)        },
+        { "u",               ACTION(UNDO)                },
+        { "<C-r>",           ACTION(REDO)                },
         { "<Left>",          ACTION(MOVEMENT_LEFT)       },
         { "<Right>",         ACTION(MOVEMENT_RIGHT)      },
         { "<Up>",            ACTION(MOVEMENT_UP)         },
@@ -154,7 +193,20 @@ static const KeyBinding* bindings[] = {
         { NULL }
     },
 
-    [HEDIT_MODE_OVERWRITE] = (const KeyBinding[]){
+    [HEDIT_MODE_INSERT] = (const KeyBinding[]){
+        { "<Escape>",        ACTION(MODE_NORMAL)         },
+        { "<Left>",          ACTION(MOVEMENT_LEFT)       },
+        { "<Right>",         ACTION(MOVEMENT_RIGHT)      },
+        { "<Up>",            ACTION(MOVEMENT_UP)         },
+        { "<Down>",          ACTION(MOVEMENT_DOWN)       },
+        { "<Home>",          ACTION(MOVEMENT_LINE_START) },
+        { "<End>",           ACTION(MOVEMENT_LINE_END)   },
+        { "<PageUp>",        ACTION(MOVEMENT_PAGE_UP)    },
+        { "<PageDown>",      ACTION(MOVEMENT_PAGE_DOWN)  },
+        { NULL }
+    },
+
+    [HEDIT_MODE_REPLACE] = (const KeyBinding[]){
         { "<Escape>",        ACTION(MODE_NORMAL)         },
         { "<Left>",          ACTION(MOVEMENT_LEFT)       },
         { "<Right>",         ACTION(MOVEMENT_RIGHT)      },
