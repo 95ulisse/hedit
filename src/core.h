@@ -184,6 +184,9 @@ HEdit* hedit_core_init(Options* options, Tickit* tickit);
  */
 void hedit_core_teardown(HEdit* hedit);
 
+/** Sends the given keys as if the used entered them. */
+void hedit_emit_keys(HEdit* hedit, const char* keys);
+
 /** Forces a full redraw of the UI. */
 void hedit_redraw(HEdit* hedit);
 

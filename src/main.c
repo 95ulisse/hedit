@@ -41,12 +41,7 @@ static int do_open_file(Tickit *t, TickitEventFlags flags, void *user) {
     tickit_term_input_push_bytes(tickit_get_term(t), ":edit ", 6);
     tickit_term_input_push_bytes(tickit_get_term(t), path, strlen(path));
     
-    TickitKeyEventInfo e = {
-        .type = TICKIT_KEYEV_KEY,
-        .mod = 0,
-        .str = "Enter"
-    };
-    tickit_term_emit_key(tickit_get_term(t), &e);
+    hedit_emit_keys(hedit, "<Enter>");
 
     return 1;
 }

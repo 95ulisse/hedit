@@ -37,7 +37,8 @@ static bool mode_command_on_exit(HEdit* hedit, Mode* next) {
 static void mode_command_on_input(HEdit* hedit, const char* key) {
     
     // Add the key to the buffer, but ignore any combo key,
-    if (key[0] != '<') {
+    bool islt = strncmp("<lt>", key, 4) == 0;
+    if (islt || key[0] != '<') {
         if (!buffer_put_char(hedit->command_buffer, key[0])) {
             log_fatal("Cannot insert char into command line buffer.");
         }
@@ -475,23 +476,70 @@ static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, vo
     HEdit* hedit = user;
     TickitKeyEventInfo* e = info;
 
-    // Wrap the key name in <> if it is not a single char
+    // Wrap the key name in <> if it is not a single char.
+    // Escape the literal `<` as `<lt>`.
     char key[30];
     if (strlen(e->str) == 1) {
-        strncpy(key, e->str, 30);
-        key[29] = '\0';
+        if (e->str[0] == '<') {
+            strcpy(key, "<lt>");
+        } else {
+            strncpy(key, e->str, 30);
+            key[29] = '\0';
+        }
     } else {
         snprintf(key, 30, "<%s>", e->str);
     }
 
-    Action* a = map_get(hedit->mode->bindings, key);
-    if (a != NULL) {
-        a->cb(hedit, &a->arg);
-    } else if (hedit->mode->on_input != NULL) {
-        hedit->mode->on_input(hedit, key);
-    }
-
+    hedit_emit_keys(hedit, key);
+    
     return 1;
+
+}
+
+void hedit_emit_keys(HEdit* hedit, const char* keys) {
+    TickitTerm* term = tickit_get_term(hedit->tickit);
+    
+    // Split each single key
+    char buf[20];
+    size_t keys_len = strlen(keys);
+    for (int i = 0; i < keys_len; i++) {
+        if (keys[i] == '<') {
+
+            // Find matching closing angular parenthesis
+            int j = i + 1;
+            while (keys[j] != '\0' && keys[j] != '>') {
+                j++;
+            }
+            if (keys[j] != '>') {
+                break;
+            }
+            int keylen = j - i - 1;
+            i = j;
+            if (keylen == 0) {
+                continue;
+            }
+            if (keylen + 2 /* For the <> */ > sizeof(buf) / sizeof(buf[0]) - 1) {
+                log_error("Max key length exceeded. Keys to send: %s", keys);
+                continue;
+            }
+
+            memmove(buf, keys + i - keylen - 1, keylen + 2);
+            buf[keylen + 2] = '\0';
+
+        } else {
+            buf[0] = keys[i];
+            buf[1] = '\0';
+        }
+
+        // Check if the key corresponds to an action
+        Action* a = map_get(hedit->mode->bindings, buf);
+        if (a != NULL) {
+            a->cb(hedit, &a->arg);
+        } else if (hedit->mode->on_input != NULL) {
+            hedit->mode->on_input(hedit, buf);
+        }
+
+    }
 
 }
 
