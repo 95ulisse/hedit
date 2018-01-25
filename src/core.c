@@ -124,6 +124,15 @@ Mode hedit_modes[] = {
 
 };
 
+Mode* hedit_mode_from_name(const char* name) {
+    for (int i = HEDIT_MODE_NORMAL; i < HEDIT_MODE_MAX; i++) {
+        if (strcasecmp(hedit_modes[i].name, name) == 0) {
+            return &hedit_modes[i];
+        }
+    }
+    return NULL;
+}
+
 void hedit_switch_mode(HEdit* hedit, enum Modes m) {
     assert(m >= HEDIT_MODE_NORMAL && m <= HEDIT_MODE_MAX);
 
@@ -496,8 +505,62 @@ static int on_keypress(TickitWindow* win, TickitEventFlags flags, void* info, vo
 
 }
 
+static void mapped_key_action(HEdit* hedit, const Value* arg) {
+
+    // Commit a new revision if a file is opened
+    if (hedit->file != NULL) {
+        hedit_file_commit_revision(hedit->file);
+    }
+    
+    // Simulate the various keys
+    hedit_emit_keys(hedit, arg->str);
+
+}
+
+bool hedit_map_keys(HEdit* hedit, enum Modes m, const char* from, const char* to, bool force) {
+    assert(m >= HEDIT_MODE_NORMAL && m <= HEDIT_MODE_MAX);
+
+    // Duplicate the strings representing the keys
+    char* fromdup = strdup(from);
+    char* todup = strdup(to);
+    if (fromdup == NULL || todup == NULL) {
+        log_fatal("Out of memory.");
+        return false;
+    }
+
+    Action* a = malloc(sizeof(Action));
+    if (a == NULL) {
+        log_fatal("Out of memory.");
+        return false;
+    }
+    a->cb = mapped_key_action;
+    a->arg.str = todup;
+
+    if (!map_put(hedit_modes[m].bindings, fromdup, a)) {
+        if (errno == EEXIST && !force) {
+            log_error("A mapping for the same key already exists. Use map! to disable this warning.");
+            free(a);
+            return false;
+        } else if (errno == EEXIST && force) {
+            map_delete(hedit_modes[m].bindings, fromdup);
+            if (!map_put(hedit_modes[m].bindings, fromdup, a)) {
+                log_fatal("Out of memory.");
+                free(a);
+                return false;
+            }
+        } else {
+            log_fatal("Out of memory.");
+            free(a);
+            return false;
+        }
+    }
+
+    log_debug("Mapping registered: %s %s => %s", hedit_modes[m].name, from, to);
+
+    return true;
+}
+
 void hedit_emit_keys(HEdit* hedit, const char* keys) {
-    TickitTerm* term = tickit_get_term(hedit->tickit);
     
     // Split each single key
     char buf[20];

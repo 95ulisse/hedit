@@ -11,7 +11,7 @@ typedef void (*ActionCallback)(HEdit* hedit, const Value* arg);
 /** An action is bound to a key stroke and has no parameters. */
 typedef struct {
     ActionCallback cb;
-    const Value arg;
+    Value arg;
 } Action;
 
 enum Actions {

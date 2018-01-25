@@ -187,12 +187,18 @@ void hedit_core_teardown(HEdit* hedit);
 /** Sends the given keys as if the used entered them. */
 void hedit_emit_keys(HEdit* hedit, const char* keys);
 
+/** Registers a new key binding. */
+bool hedit_map_keys(HEdit* hedit, enum Modes m, const char* from, const char* to, bool force);
+
 /** Forces a full redraw of the UI. */
 void hedit_redraw(HEdit* hedit);
 
 /** Forces a full redraw of the current view. */
 void hedit_redraw_view(HEdit* hedit);
 
+
+/** Returns the mode with the given name, or NULL if the mode does not exist. */
+Mode* hedit_mode_from_name(const char*);
 
 /** Switches the editor to a new mode. */
 void hedit_switch_mode(HEdit* hedit, enum Modes m);

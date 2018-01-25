@@ -51,6 +51,7 @@ static inline bool str2int(const char* s, int base, int* out) {
 typedef struct {
     int i;
     bool b;
+    char* str;
 } Value;
 
 #endif

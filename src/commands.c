@@ -129,6 +129,37 @@ static bool set(HEdit* hedit, bool force, ArgIterator* args) {
 
 }
 
+static bool map(HEdit* hedit, bool force, ArgIterator* args) {
+
+    // Mode name
+    char* modename = it_next(args);
+    if (!modename) {
+        log_error("Usage: map <mode> <from> <to>");
+        return false;
+    }
+    Mode* mode = hedit_mode_from_name(modename);
+    if (!mode) {
+        log_error("Unknown mode: %s.", modename);
+        return false;
+    }
+
+    // From key
+    char* from = it_next(args);
+    if (!from) {
+        log_error("Usage: map <mode> <from> <to>");
+        return false;
+    }
+
+    // To key
+    char* to = it_next(args);
+    if (!to) {
+        log_error("Usage: map <mode> <from> <to>");
+        return false;
+    }
+
+    return hedit_map_keys(hedit, mode->id, from, to, force);
+}
+
 
 
 // ----------------------------------------------------------------------------
@@ -166,6 +197,7 @@ bool hedit_init_commands() {
     REG2(write, w);
     REG(wq);
     REG(set);
+    REG(map);
 #pragma GCC diagnostic warning "-Wpedantic"
 
     return true;
