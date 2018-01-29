@@ -1,1 +1,3 @@
 out/
+lib/.gclient*
+lib/v8/
