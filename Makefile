@@ -1,14 +1,14 @@
 # Common paths
 SRC = src
 OUT = out
-LIB = lib
+DEPS = deps
 
 # Common compilation flags
 ARCH ?= $(shell gcc -dumpmachine | cut -d - -f 1)
 CC = gcc
 CFLAGS += -std=c99 -Wall -pedantic -D_POSIX_C_SOURCE=200809L
-INCLUDES = -I "$(SRC)" -I "$(LIB)/libtickit/include"
-LDFLAGS += -L "$(LIB)/libtickit/.libs" -l:libtickit.a -ltermkey -lunibilium -lm
+INCLUDES = -I "$(SRC)" -I "$(DEPS)/libtickit/include"
+LDFLAGS += -L "$(DEPS)/libtickit/.libs" -l:libtickit.a -ltermkey -lunibilium -lm
 DEBUGFLAGS = -g -DDEBUG
 OPTFLAGS = -O2 -DNDEBUG
 
@@ -49,12 +49,12 @@ all: hedit
 
 .PHONY: libtickit
 libtickit:
-	$(MAKE) -C $(LIB)/libtickit
+	$(MAKE) -C $(DEPS)/libtickit
 
 .PHONY: v8
 v8:
-	(cd $(LIB) && ./prepare-v8.sh $(V8_VERSION))
-	$(MAKE) -C $(LIB)/v8 $(V8_ARCH).release GYPFLAGS="-Dclang=0 -Dwerror=''"
+	(cd $(DEPS) && ./prepare-v8.sh $(V8_VERSION))
+	$(MAKE) -C $(DEPS)/v8 $(V8_ARCH).release GYPFLAGS="-Dclang=0 -Dwerror=''"
 
 
 
