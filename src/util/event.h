@@ -4,15 +4,19 @@
 #include "util/list.h"
 
 typedef struct list_head Event;
+typedef void (*EventHandler)(void*, ...);
 
 struct __event_handler {
-    void (*f)(void*, ...);
+    EventHandler f;
     void* user;
     struct list_head list;
 };
 
 #define event_init(ev) list_init(ev)
-void* event_add(Event* ev, void (*f)(void*, ...), void* user);
+// This indirection on event_add is just to automatically add the cast
+// and suppress compiler warnings abount mismatching function types.
+#define event_add(ev, f, user) __event_add((ev), (EventHandler)(f), (user)) 
+void* __event_add(Event* ev, EventHandler f, void* user);
 void event_del(Event* ev, void* token);
 
 #define event_fire(ev, ...) \

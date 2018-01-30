@@ -3,7 +3,7 @@
 #include "util/log.h"
 #include "util/event.h"
 
-void* event_add(Event* ev, void (*f)(void*, ...), void* user) {
+void* __event_add(Event* ev, EventHandler f, void* user) {
 
     // Allocate a new handler
     struct __event_handler* handler = malloc(sizeof(struct __event_handler));

@@ -18,7 +18,7 @@ endif
 
 # Common compilation flags
 CC = gcc
-CFLAGS += -std=c99 -Wall -pedantic -D_POSIX_C_SOURCE=200809L
+CFLAGS += -std=c99 -Wall -Werror -pedantic -D_POSIX_C_SOURCE=200809L
 INCLUDES = -I "$(SRC)" -I "$(DEPS)/libtickit/include"
 LDFLAGS += -L "$(DEPS)/libtickit/.libs" -L "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src" -L "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/third_party/icu" \
            -lm \

@@ -177,8 +177,10 @@ void hedit_switch_view(HEdit* hedit, enum Views v) {
 
     // If the views have not been initialized yet, do it now
     if (hedit_views[0].id == 0) {
+#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
         INIT_VIEW(HEDIT_VIEW_SPLASH);
         INIT_VIEW(HEDIT_VIEW_EDIT);
+#pragma GCC diagnostic warning "-Wimplicit-function-declaration"
     }
 
     View* old = hedit->view;
