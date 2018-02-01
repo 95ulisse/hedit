@@ -14,6 +14,9 @@ typedef struct HEdit HEdit;
 #include "util/event.h"
 #include "util/buffer.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 enum Modes {
@@ -224,5 +227,10 @@ bool hedit_option_set(HEdit* hedit, const char* name, const char* newvalue);
 
 /** Switches to the given view. */
 void hedit_switch_view(HEdit* hedit, enum Views v);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

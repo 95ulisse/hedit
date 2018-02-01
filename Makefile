@@ -18,15 +18,26 @@ endif
 
 # Common compilation flags
 CC = gcc
+CXX = g++
 CFLAGS += -std=c99 -Wall -Werror -pedantic -D_POSIX_C_SOURCE=200809L
-INCLUDES = -I "$(SRC)" -I "$(DEPS)/libtickit/include"
-LDFLAGS += -L "$(DEPS)/libtickit/.libs" -L "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src" -L "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/third_party/icu" \
-           -lm \
+CXXFLAGS += -std=c++11 -Wall -Werror -pedantic
+INCLUDES = -I "$(SRC)" -I "$(DEPS)/libtickit/include" -I "$(DEPS)/v8/include"
+LDFLAGS += -L "$(DEPS)/libtickit/.libs" \
+           -lm -pthread \
            -l:libtickit.a -ltermkey -lunibilium \
-           -l:libv8_base.a -l:libv8_libbase.a -l:libv8_external_snapshot.a -l:libv8_libplatform.a -l:libv8_libsampler.a \
-           -l:libicuuc.a -l:libicui18n.a
-DEBUGFLAGS = -g -DDEBUG
-OPTFLAGS = -O2 -DNDEBUG
+           -Wl,--start-group "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src/libv8_libplatform.a" \
+                             "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src/libv8_base.a" \
+                             "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src/libv8_libbase.a" \
+                             "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src/libv8_nosnapshot.a" \
+                             "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src/libv8_libsampler.a" \
+                             "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src/libv8_initializers.a" \
+                             "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/src/libv8_init.a" \
+                             "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/third_party/icu/libicui18n.a" \
+                             "$(DEPS)/v8/out/$(V8_ARCH).release/obj.target/third_party/icu/libicuuc.a" \
+           -Wl,--end-group
+
+DEBUGFLAGS += -g -DDEBUG
+OPTFLAGS += -O2 -DNDEBUG
 
 
 OBJECTS = $(OUT)/util/log.o \
@@ -41,6 +52,7 @@ OBJECTS = $(OUT)/util/log.o \
 		  $(OUT)/views/splash.o \
 		  $(OUT)/views/edit.o \
           $(OUT)/core.o \
+          $(OUT)/js.o \
           $(OUT)/main.o
 
 
@@ -67,10 +79,14 @@ $(OUT)/%.o: $(SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(_DEBUG) $(_OPT) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
+$(OUT)/%.o: $(SRC)/%.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(_DEBUG) $(_OPT) $(CXXFLAGS) $(INCLUDES) -c -o $@ $<
+
 .PHONY: hedit
 hedit: libtickit $(OBJECTS) v8
 	@mkdir -p $(OUT)
-	$(CC) $(_DEBUG) $(_OPT) $(CFLAGS) $(INCLUDES) -o $(OUT)/hedit $(OBJECTS) $(LDFLAGS)
+	$(CXX) $(_DEBUG) $(_OPT) $(CFLAGS) $(INCLUDES) -o $(OUT)/hedit $(OBJECTS) $(LDFLAGS)
 
 .PHONY: debug
 debug: _DEBUG=$(DEBUGFLAGS)

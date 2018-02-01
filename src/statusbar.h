@@ -3,6 +3,11 @@
 
 #include "core.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /** Opaque Statusbar type */
 typedef struct Statusbar Statusbar;
 
@@ -14,5 +19,10 @@ void hedit_statusbar_teardown(Statusbar* statusbar);
 
 /** Forces a redraw of the statusbar. */
 void hedit_statusbar_redraw(Statusbar* statusbar);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

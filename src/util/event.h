@@ -3,6 +3,11 @@
 
 #include "util/list.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 typedef struct list_head Event;
 typedef void (*EventHandler)(void*, ...);
 
@@ -23,5 +28,10 @@ void event_del(Event* ev, void* token);
     list_for_each_member(h, ev, struct __event_handler, list) { \
         h->f(h->user, ##__VA_ARGS__); \
     }
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

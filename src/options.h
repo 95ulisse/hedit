@@ -3,6 +3,11 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /** Structure containing all the HEdit command line options. */
 typedef struct {
     bool show_help;
@@ -19,5 +24,10 @@ typedef struct {
  *            `false` otherwise.
  */
 bool options_parse(Options* options, int argc, char** argv);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

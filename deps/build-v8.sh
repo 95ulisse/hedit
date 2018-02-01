@@ -42,4 +42,4 @@ fi
 popd
 
 # Build v8
-make -C v8 "$ARCH.release" GYPFLAGS="-Dclang=0 -Dwerror=''"
+GYPFLAGS="-Dclang=0" make -C v8 "$ARCH.release" werror=no

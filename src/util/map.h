@@ -6,6 +6,11 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @file
  * Crit-bit tree based map which supports unique prefix queries and
@@ -84,5 +89,10 @@ void map_free(Map*);
  * @endrst
  */
 void map_free_full(Map*);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -3,6 +3,11 @@
 
 #include <stdlib.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /** Opaque structure representing an open file. */
 typedef struct File File;
 
@@ -59,5 +64,10 @@ bool hedit_file_read_byte(File*, size_t offset, unsigned char* out);
  * The visitor function may be called more than once with different parts of the file.
  */
 bool hedit_file_visit(File*, size_t start, size_t len, bool (*visitor)(File*, size_t offset, const unsigned char* data, size_t len, void* user), void* user);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

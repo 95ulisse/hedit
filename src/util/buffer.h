@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * Opaque data type for a gap buffer.
  * 
@@ -66,5 +71,10 @@ void buffer_visit(Buffer*, void (*visitor)(Buffer*, size_t pos, const char* str,
  * A NULL terminator will be added after the buffer contents.
  */
 void buffer_copy_to(Buffer*, char*);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

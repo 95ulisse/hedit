@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include "util/map.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** Initializes the map with all the builtin commands. */
 bool hedit_init_commands();
 
@@ -14,5 +18,9 @@ bool hedit_init_commands();
  * Note: this function will alter the contents of str!
  */
 bool hedit_command_exec(HEdit*, char* str);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

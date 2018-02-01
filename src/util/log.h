@@ -5,6 +5,11 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 typedef enum log_severity { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL } log_severity;
 
 struct log_config {
@@ -34,5 +39,10 @@ void* log_register_sink(log_sink sink, void* user);
 void log_unregister_sink(void* token);
 
 void __hedit_log(const char* file, int line, log_severity severity, const char* format, ...);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -11,6 +11,7 @@
 #include "actions.h"
 #include "commands.h"
 #include "options.h"
+#include "js.h"
 #include "util/log.h"
 #include "util/event.h"
 
@@ -88,6 +89,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Initialize V8
+    if (!hedit_js_init(argc, argv)) {
+        log_fatal("Cannot initialize V8.");
+        return 1;
+    }
+
     // Initialize a new global state
     HEdit* hedit = hedit_core_init(&options, tickit);
     if (hedit == NULL) {
@@ -126,6 +133,7 @@ int main(int argc, char** argv) {
     // Tear down everything
     int exitcode = hedit->exitcode;
     hedit_core_teardown(hedit);
+    hedit_js_teardown();
     tickit_unref(tickit);
     log_teardown();
     return exitcode;

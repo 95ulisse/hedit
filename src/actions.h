@@ -5,6 +5,10 @@
 #include "core.h"
 #include "util/common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** Type of the functions that will be called when an action needs to be performed. */
 typedef void (*ActionCallback)(HEdit* hedit, const Value* arg);
 
@@ -53,5 +57,9 @@ extern const Action hedit_actions[];
 
 /** Registers the default key bindings for all the modes in the given instance. */
 bool hedit_init_actions();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
