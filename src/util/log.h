@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 
-typedef enum log_severity { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL } log_severity;
+typedef enum log_severity { LOG_DEBUG = 0, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL } log_severity;
 
 struct log_config {
     bool quiet;

@@ -64,12 +64,20 @@ Persistent<Module>& JsBuiltinModule::GetModule() {
 // ----------------------------------------------------------------------------------------------------------
 
 
-static void Test(const v8::FunctionCallbackInfo<v8::Value>& args) {
+// __hedit.log("file", line, severity, "contents");
+static void Log(const v8::FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    Local<Context> ctx = isolate->GetCurrentContext();
+
     HandleScope handle_scope(isolate);
-    for (int i = 0; i < args.Length(); i++) {
-        String::Utf8Value str(isolate, args[i]);
-        log_info("%s", *str);
-    }
+    assert(args.Length() == 4);
+
+    String::Utf8Value file(isolate, args[0]);
+    int line = args[1]->Int32Value(ctx).FromJust();
+    int severity = args[2]->Int32Value(ctx).FromJust();
+    String::Utf8Value contents(isolate, args[3]);
+
+    __hedit_log(*file, line, (log_severity) severity, "%s", *contents);
 }
 
 
@@ -194,13 +202,22 @@ bool hedit_js_init(int argc, char** argv) {
         
         // Build the global `__hedit` object that will be exposed to builtin scripts
         Local<ObjectTemplate> obj = ObjectTemplate::New(isolate);
-        obj->Set(String::NewFromUtf8(isolate, "test", NewStringType::kNormal).ToLocalChecked(), FunctionTemplate::New(isolate, Test));
+        obj->Set(v8_str("log"), FunctionTemplate::New(isolate, Log));
         Local<ObjectTemplate> builtin_global = ObjectTemplate::New(isolate);
-        builtin_global->Set(String::NewFromUtf8(isolate, "__hedit", NewStringType::kNormal).ToLocalChecked(), obj);
+        builtin_global->Set(v8_str("__hedit"), obj);
+
+        // Create the contexts
+        Local<Context> user_ctx = Context::New(isolate);
+        Local<Context> builtin_ctx = Context::New(isolate, NULL, builtin_global);
+
+        // Set the same access token to allow access between the two contexts
+        Local<Symbol> token = Symbol::New(isolate, v8_str("security-token"));
+        user_ctx->SetSecurityToken(token);
+        builtin_ctx->SetSecurityToken(token);
 
         // Prepare the contexts to be reused later
-        user_context.Reset(isolate, Context::New(isolate));
-        builtin_context.Reset(isolate, Context::New(isolate, NULL, builtin_global));
+        user_context.Reset(isolate, user_ctx);
+        builtin_context.Reset(isolate, builtin_ctx);
     }    
 
     return true;
