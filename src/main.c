@@ -49,6 +49,7 @@ static int do_open_file(Tickit *t, TickitEventFlags flags, void *user) {
 
 static int on_tickit_ready(Tickit *t, TickitEventFlags flags, void *user) {
     HEdit* hedit = user;
+    hedit_js_load_user_config(hedit);
     event_fire(&hedit->ev_load, hedit);
     return 1;
 }

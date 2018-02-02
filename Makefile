@@ -2,6 +2,7 @@
 SRC = src
 OUT = out
 DEPS = deps
+GEN = $(OUT)/gen
 
 # V8 version and arch
 ARCH ?= $(shell gcc -dumpmachine | cut -d - -f 1)
@@ -53,16 +54,20 @@ OBJECTS = $(OUT)/util/log.o \
 		  $(OUT)/views/edit.o \
           $(OUT)/core.o \
           $(OUT)/js.o \
+          $(GEN)/js-builtin-modules.o \
           $(OUT)/main.o
+
+JS_MODULES = $(wildcard $(SRC)/js/*.js)
 
 
 # Default task
 .PHONY: all
-all: _OPT=$(OPTFLAGS)
-all: hedit
+all: release
 
 
+# --------------------------------------------------------------------
 # External libs
+# --------------------------------------------------------------------
 
 .PHONY: libtickit
 libtickit:
@@ -73,24 +78,44 @@ v8:
 	(cd $(DEPS) && ./build-v8.sh $(V8_VERSION) $(V8_ARCH))
 
 
+# --------------------------------------------------------------------
 # HEdit
+# --------------------------------------------------------------------
 
+# C sources
 $(OUT)/%.o: $(SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(_DEBUG) $(_OPT) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
+# C++ sources
 $(OUT)/%.o: $(SRC)/%.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(_DEBUG) $(_OPT) $(CXXFLAGS) $(INCLUDES) -c -o $@ $<
 
+# Embedded JS files
+$(GEN)/js-builtin-modules.o: $(JS_MODULES)
+	@mkdir -p $(dir $@)
+	./scripts/gen-js.sh "$(SRC)/js" "$(GEN)/js-builtin-modules.cc"
+	$(CXX) $(_DEBUG) $(_OPT) $(CXXFLAGS) $(INCLUDES) -c -o $@ $(GEN)/js-builtin-modules.cc
+
+# Main target
 .PHONY: hedit
-hedit: libtickit $(OBJECTS) v8
+hedit: libtickit v8 $(OBJECTS)
 	@mkdir -p $(OUT)
-	$(CXX) $(_DEBUG) $(_OPT) $(CFLAGS) $(INCLUDES) -o $(OUT)/hedit $(OBJECTS) $(LDFLAGS)
+	$(CXX) $(_DEBUG) $(_OPT) -o $(OUT)/hedit $(OBJECTS) $(LDFLAGS)
 
 .PHONY: debug
 debug: _DEBUG=$(DEBUGFLAGS)
 debug: hedit
+
+.PHONY: release
+release: _OPT=$(OPTFLAGS)
+release: hedit
+
+
+# --------------------------------------------------------------------
+# Utilities
+# --------------------------------------------------------------------
 
 .PHONY: clean
 clean:
