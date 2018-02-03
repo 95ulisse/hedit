@@ -354,7 +354,7 @@ static void on_delete(HEdit* hedit, ssize_t count) {
         if (count == 1 && state->left == false) {
             // Set the first digit to 0
             unsigned char byte = 0;
-            assert(hedit_file_read_byte(hedit->file, state->cursor_pos, &byte));
+            hedit_file_read_byte(hedit->file, state->cursor_pos, &byte);
             byte %= 16;
             if (hedit_file_replace(hedit->file, state->cursor_pos, &byte, 1)) {
                 on_movement(hedit, HEDIT_MOVEMENT_LEFT, 0);
