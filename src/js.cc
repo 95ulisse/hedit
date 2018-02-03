@@ -36,7 +36,7 @@ JsBuiltinModule::JsBuiltinModule(std::string name, const unsigned char* source, 
 {
 }
 
-JsBuiltinModule* JsBuiltinModule::FromName(std::string name) {
+std::shared_ptr<JsBuiltinModule> JsBuiltinModule::FromName(std::string name) {
     auto it = _all_modules.find(name);
     if (it == _all_modules.end()) {
         return nullptr;
@@ -250,7 +250,7 @@ static MaybeLocal<Module> ModuleResolveCallback(Local<Context> ctx, Local<String
 
     // A module can import only builtins
     String::Utf8Value s(isolate, specifier);
-    JsBuiltinModule* builtin = JsBuiltinModule::FromName(std::string(c_str(s)));
+    std::shared_ptr<JsBuiltinModule> builtin = JsBuiltinModule::FromName(std::string(c_str(s)));
     if (builtin == nullptr) {
         isolate->ThrowException(String::Concat(v8_str("Cannot resolve module "), specifier));
         return MaybeLocal<Module>();
@@ -352,7 +352,7 @@ static void LoadUserConfig() {
                 if (errno != ENOENT) {
                     log_warn("Error loading %s: %s.", expanded_path, strerror(errno));
                 }
-                continue;
+                goto next;
             }
 
             // Stat to get the size
@@ -360,7 +360,7 @@ static void LoadUserConfig() {
             if (fstat(fd, &s) < 0) {
                 log_warn("Cannot stat %s: %s.", expanded_path, strerror(errno));
                 close(fd);
-                continue;
+                goto next;
             }
 
             // Mmap the file to memory
@@ -368,7 +368,7 @@ static void LoadUserConfig() {
             if (contents == MAP_FAILED) {
                 log_warn("Cannot mmap %s: %s.", expanded_path, strerror(errno));
                 close(fd);
-                continue;
+                goto next;
             }
 
             // Close the file
@@ -385,6 +385,8 @@ static void LoadUserConfig() {
             munmap((void*) contents, s.st_size);
 
         }
+
+next:
         wordfree(&p);
 
     }

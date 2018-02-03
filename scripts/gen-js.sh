@@ -14,6 +14,7 @@ gen_code() {
     declare -A MODULE_MAP
 
     cat <<EOF
+#include <memory>
 #include <map>
 #include <js.h>
 EOF
@@ -33,11 +34,11 @@ EOF
 
     cat <<EOF
 
-std::map<std::string, JsBuiltinModule*> JsBuiltinModule::_all_modules = {
+std::map<std::string, std::shared_ptr<JsBuiltinModule>> JsBuiltinModule::_all_modules = {
 EOF
 
     for k in "${!MODULE_MAP[@]}"; do
-        echo "{ \"$k\", new JsBuiltinModule(\"$k\", ${MODULE_MAP[$k]}, ${MODULE_MAP[$k]}_len) },"
+        echo "{ \"$k\", std::shared_ptr<JsBuiltinModule>(new JsBuiltinModule(\"$k\", ${MODULE_MAP[$k]}, ${MODULE_MAP[$k]}_len)) },"
     done
 
     echo "};"

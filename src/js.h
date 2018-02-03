@@ -18,7 +18,7 @@ public:
     size_t GetSourceLen();
     v8::Persistent<v8::Module>& GetModule();
 
-    static JsBuiltinModule* FromName(std::string name);
+    static std::shared_ptr<JsBuiltinModule> FromName(std::string name);
 
 private:
     const std::string _name;
@@ -29,7 +29,7 @@ private:
     // This is the map of all the builtin modules.
     // It is filled at build time by generating another .cc file with the initializer.
     // See `scripts/gen-js.sh` for more details.
-    static std::map<std::string, JsBuiltinModule*> _all_modules;
+    static std::map<std::string, std::shared_ptr<JsBuiltinModule>> _all_modules;
 };
 
 #endif
