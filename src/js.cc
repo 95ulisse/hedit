@@ -238,6 +238,143 @@ static void SwitchMode(const FunctionCallbackInfo<v8::Value>& args) {
     hedit_switch_mode(hedit, mode->id);
 }
 
+// __hedit.file_isOpen();
+static void FileIsOpen(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+
+    args.GetReturnValue().Set(hedit->file != NULL);
+}
+
+// __hedit.file_name();
+static void FileName(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+    assert(hedit->file != NULL);
+
+    args.GetReturnValue().Set(v8_str(hedit_file_name(hedit->file)));
+}
+
+// __hedit.file_size();
+static void FileSize(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+    assert(hedit->file != NULL);
+
+    args.GetReturnValue().Set((double) hedit_file_size(hedit->file));
+}
+
+// __hedit.file_isDirty();
+static void FileIsDirty(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+    assert(hedit->file != NULL);
+
+    args.GetReturnValue().Set(hedit_file_is_dirty(hedit->file));
+}
+
+// __hedit.file_undo();
+static void FileUndo(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+    assert(hedit->file != NULL);
+
+    size_t unused;
+    bool res = hedit_file_undo(hedit->file, &unused);
+    args.GetReturnValue().Set(res);
+
+    if (res) {
+        hedit_redraw_view(hedit);
+    }
+}
+
+// __hedit.file_redo();
+static void FileRedo(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+    assert(hedit->file != NULL);
+
+    size_t unused;
+    bool res = hedit_file_redo(hedit->file, &unused);
+    args.GetReturnValue().Set(res);
+
+    if (res) {
+        hedit_redraw_view(hedit);
+    }
+}
+
+// __hedit.file_commit();
+static void FileCommit(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+    assert(hedit->file != NULL);
+
+    args.GetReturnValue().Set(hedit_file_commit_revision(hedit->file));
+}
+
+// __hedit.file_insert(offset, data);
+static void FileInsert(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 2);
+    assert(hedit->file != NULL);
+
+    size_t offset = args[0]->IntegerValue(ctx).FromJust();
+    String::Utf8Value data(isolate, args[1]);
+
+    bool res = hedit_file_insert(hedit->file, offset, (const unsigned char*) *data, data.length());
+    args.GetReturnValue().Set(res);
+
+    if (res) {
+        hedit_redraw_view(hedit);
+    }
+}
+
+// __hedit.file_delete(offset, len);
+static void FileDelete(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 2);
+    assert(hedit->file != NULL);
+
+    size_t offset = args[0]->IntegerValue(ctx).FromJust();
+    size_t len = args[1]->IntegerValue(ctx).FromJust();
+
+    bool res = hedit_file_delete(hedit->file, offset, len);
+    args.GetReturnValue().Set(res);
+
+    if (res) {
+        hedit_redraw_view(hedit);
+    }
+}
+
 
 // ----------------------------------------------------------------------------------------------------------
 
@@ -425,6 +562,15 @@ bool hedit_js_init(HEdit* hedit) {
         SET("map", MapKeys);
         SET("set", SetOption);
         SET("switchMode", SwitchMode);
+        SET("file_isOpen", FileIsOpen);
+        SET("file_name", FileName);
+        SET("file_size", FileSize);
+        SET("file_isDirty", FileIsDirty);
+        SET("file_undo", FileUndo);
+        SET("file_redo", FileRedo);
+        SET("file_commit", FileCommit);
+        SET("file_insert", FileInsert);
+        SET("file_delete", FileDelete);
         Local<ObjectTemplate> builtin_global = ObjectTemplate::New(isolate);
         builtin_global->Set(v8_str("__hedit"), obj);
 
