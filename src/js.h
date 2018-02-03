@@ -41,14 +41,16 @@ private:
 extern "C" {
 #endif
 
-/** Initializer for V8. This must be called exactly once. */
-bool hedit_js_init(int argc, char** argv);
+/**
+ * Initializer for V8. It also loads and executes (if present)
+ * any user-specific configuration files.
+ *
+ * This must be called at most once.
+ */
+bool hedit_js_init(HEdit*);
 
-/** Releases all the resources held by V8. This must be called exactly once. */
+/** Releases all the resources held by V8. This must be called at most once. */
 void hedit_js_teardown();
-
-/** Loads and executes (if present) the user-specific configuration files. */
-void hedit_js_load_user_config(HEdit*);
 
 #ifdef __cplusplus
 }

@@ -172,6 +172,15 @@ void hedit_switch_mode(HEdit* hedit, enum Modes m) {
 // This array will be populated by the single functions in the files views/*.c
 View hedit_views[HEDIT_VIEW_MAX];
 
+View* hedit_view_from_name(const char* name) {
+    for (int i = HEDIT_VIEW_SPLASH; i < HEDIT_VIEW_MAX; i++) {
+        if (strcasecmp(hedit_views[i].name, name) == 0) {
+            return &hedit_views[i];
+        }
+    }
+    return NULL;
+}
+
 void hedit_switch_view(HEdit* hedit, enum Views v) {
     assert(v >= HEDIT_VIEW_SPLASH && v <= HEDIT_VIEW_MAX);
 
@@ -404,6 +413,8 @@ bool hedit_option_set(HEdit* hedit, const char* name, const char* newstr) {
     }
     opt->value = newvalue;
 
+    log_debug("New value for option %s: %s", name, newstr);
+
     return true;
 
 }
@@ -634,6 +645,11 @@ HEdit* hedit_core_init(Options* cli_options, Tickit* tickit) {
         goto error;
     }
 
+    // Initialize default builtin commands
+    if (!hedit_init_commands(hedit)) {
+        goto error;
+    }
+
     // Create the window for the view
     hedit->viewwin = tickit_window_new(hedit->rootwin, (TickitRect) {
         .top = 0,
@@ -678,6 +694,9 @@ error:
     if (hedit != NULL) {
         if (hedit->options != NULL) {
             map_free_full(hedit->options);
+        }
+        if (hedit->commands != NULL) {
+            map_free_full(hedit->commands);
         }
         if (hedit->viewwin != NULL) {
             tickit_window_close(hedit->viewwin);
@@ -726,6 +745,9 @@ void hedit_core_teardown(HEdit* hedit) {
 
     // Options
     map_free_full(hedit->options);
+
+    // Commands
+    map_free_full(hedit->commands);
 
     // Destroy the view window
     tickit_window_close(hedit->viewwin);

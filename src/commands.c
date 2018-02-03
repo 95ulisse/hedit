@@ -9,21 +9,23 @@
 #include "util/map.h"
 #include "util/event.h"
 
-/** Iterator over the arguments of a command. */
-typedef struct {
+
+struct ArgIterator {
     char* ptr;
-} ArgIterator;
-static void it_init(ArgIterator*, char*);
-static char* it_next(ArgIterator*);
+};
 
-/** Type of all the functions in the map. */
-typedef bool (*CommandCallback)(HEdit*, bool force, ArgIterator* args);
-
-/** Map of all the default builtin commands. */
-Map* hedit_commands;
+/** Type of the command handlers. */
+typedef struct {
+    bool (*handler)(HEdit*, bool force, ArgIterator* args, void* user);
+    void* user;
+} Command;
 
 
-static bool quit(HEdit* hedit, bool force, ArgIterator* args) {
+// Forward declarations
+static void it_init(ArgIterator* args, char* ptr);
+
+
+static bool quit(HEdit* hedit, bool force, ArgIterator* args, void* user) {
     
     // Do not exit if there's a dirty file open
     if (hedit->file != NULL && hedit_file_is_dirty(hedit->file) && !force) {
@@ -35,14 +37,14 @@ static bool quit(HEdit* hedit, bool force, ArgIterator* args) {
     return true;
 }
 
-static bool edit(HEdit* hedit, bool force, ArgIterator* args) {
+static bool edit(HEdit* hedit, bool force, ArgIterator* args, void* user) {
 
     if (hedit->file != NULL) {
         log_error("Another file is already opened.");
         return false;
     }
 
-    char* path = it_next(args);
+    const char* path = it_next(args);
     if (path == NULL) {
         log_error(":edit requires path of file to open.");
         return false;
@@ -61,7 +63,7 @@ static bool edit(HEdit* hedit, bool force, ArgIterator* args) {
     return true;
 }
 
-static bool close(HEdit* hedit, bool force, ArgIterator* args) {
+static bool close(HEdit* hedit, bool force, ArgIterator* args, void* user) {
 
     if (hedit->file == NULL) {
         log_error("No file open.");
@@ -84,7 +86,7 @@ static bool close(HEdit* hedit, bool force, ArgIterator* args) {
 
 }
 
-static bool write(HEdit* hedit, bool force, ArgIterator* args) {
+static bool write(HEdit* hedit, bool force, ArgIterator* args, void* user) {
 
     if (hedit->file == NULL) {
         log_error("No file open.");
@@ -107,32 +109,32 @@ static bool write(HEdit* hedit, bool force, ArgIterator* args) {
 
 }
 
-static bool wq(HEdit* hedit, bool force, ArgIterator* args) {
+static bool wq(HEdit* hedit, bool force, ArgIterator* args, void* user) {
     ArgIterator empty = { 0 };
-    return write(hedit, force, args)
-        && quit(hedit, force, &empty);
+    return write(hedit, force, args, user)
+        && quit(hedit, force, &empty, user);
 }
 
-static bool set(HEdit* hedit, bool force, ArgIterator* args) {
+static bool set(HEdit* hedit, bool force, ArgIterator* args, void* user) {
     
     // Option name
-    char* name = it_next(args);
+    const char* name = it_next(args);
     if (!name) {
         log_error("Option name required. Usage: set option [value]");
         return false;
     }
 
     // Value might be optional
-    char* value = it_next(args);
+    const char* value = it_next(args);
 
     return hedit_option_set(hedit, name, value);
 
 }
 
-static bool map(HEdit* hedit, bool force, ArgIterator* args) {
+static bool map(HEdit* hedit, bool force, ArgIterator* args, void* user) {
 
     // Mode name
-    char* modename = it_next(args);
+    const char* modename = it_next(args);
     if (!modename) {
         log_error("Usage: map <mode> <from> <to>");
         return false;
@@ -144,14 +146,14 @@ static bool map(HEdit* hedit, bool force, ArgIterator* args) {
     }
 
     // From key
-    char* from = it_next(args);
+    const char* from = it_next(args);
     if (!from) {
         log_error("Usage: map <mode> <from> <to>");
         return false;
     }
 
     // To key
-    char* to = it_next(args);
+    const char* to = it_next(args);
     if (!to) {
         log_error("Usage: map <mode> <from> <to>");
         return false;
@@ -167,30 +169,40 @@ static bool map(HEdit* hedit, bool force, ArgIterator* args) {
 
 
 
-bool hedit_init_commands() {
+bool hedit_command_register(HEdit* hedit, const char* name, bool (*cb)(HEdit*, bool, ArgIterator*, void*), void* user) {
+
+    Command* cmd = malloc(sizeof(Command));
+    if (cmd == NULL) {
+        log_fatal("Out of memory.");
+        return false;
+    }
+    cmd->handler = cb;
+    cmd->user = user;
+
+    if (!map_put(hedit->commands, name, cmd)) {
+        if (errno != EEXIST) {
+            log_error("Cannot register command %s.", name);
+        }
+        free(cmd);
+        return false;
+    }
+
+    return true;
+}
+
+bool hedit_init_commands(HEdit* hedit) {
 
     // Allocate the map
-    hedit_commands = map_new();
-    if (!hedit_commands) {
+    hedit->commands = map_new();
+    if (!hedit->commands) {
         log_fatal("Out of memory.");
         return false;
     }
 
-#define REG(c) \
-    if (!map_put(hedit_commands, #c, (void*) c)) { \
-        log_fatal("Cannot register command " #c "."); \
-        return false; \
-    }
-#define REG2(c, alias) \
-    REG(c); \
-    if (!map_put(hedit_commands, #alias, (void*) c)) { \
-        log_fatal("Cannot register command " #c "."); \
-        return false; \
-    }
+#define REG(c) hedit_command_register(hedit, #c, c, NULL);
+#define REG2(c, alias) REG(c); hedit_command_register(hedit, #alias, c, NULL);
 
     // Register the single commands.
-    // Ignores the function pointer <-> void* cast warning.
-#pragma GCC diagnostic ignored "-Wpedantic"
     REG2(quit, q);
     REG2(edit, e);
     REG(close);
@@ -198,7 +210,6 @@ bool hedit_init_commands() {
     REG(wq);
     REG(set);
     REG(map);
-#pragma GCC diagnostic warning "-Wpedantic"
 
     return true;
 
@@ -238,7 +249,7 @@ static bool parse_command_line(char* line, char** command_name, bool* force, Arg
     // So here we can treat the command name as the first "argument".
 
     it_init(args, line);
-    char* cmd = it_next(args);
+    char* cmd = (char*) it_next(args);
     if (cmd == NULL) {
         return false;
     }
@@ -267,7 +278,7 @@ bool hedit_command_exec(HEdit* hedit, char* str) {
     }
 
     // Look for the command in the map
-    const Map* map = map_prefix(hedit_commands, command_name);
+    const Map* map = map_prefix(hedit->commands, command_name);
     if (map_empty(map)) {
         log_error("Command %s not registered.", command_name);
         return false;
@@ -287,10 +298,9 @@ bool hedit_command_exec(HEdit* hedit, char* str) {
 
     }
 
-    CommandCallback cmd;
-    *(void **)&(cmd) = map_first(map, NULL); // Trick to avoid warning for function <-> void* cast
+    Command* cmd = map_first(map, NULL);
     log_debug("Executing command %s.", name);
-    return cmd(hedit, force, &args);
+    return cmd->handler(hedit, force, &args, cmd->user);
 
 }
 
@@ -305,7 +315,7 @@ static void it_init(ArgIterator* args, char* ptr) {
     args->ptr = ptr;
 }
 
-static char* it_next(ArgIterator* args) {
+const char* it_next(ArgIterator* args) {
 
     if (args == NULL || args->ptr == NULL || args->ptr[0] == '\0') {
         return NULL;
@@ -323,7 +333,7 @@ static char* it_next(ArgIterator* args) {
     }
 
     // Double quotes act like escape that allow capturing spaces
-    char* base = ptr;
+    const char* base = ptr;
     if (*ptr == '"') {
 
         do {

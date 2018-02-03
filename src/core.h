@@ -137,8 +137,9 @@ struct HEdit {
     Options* cli_options;
 
     // Components
-    Mode* mode;
     Map* options; // Map of Option*
+    Map* commands; // Map of Command*
+    Mode* mode;
     File* file;
     View* view;
     void* viewdata; // Private state of the current view
@@ -224,6 +225,9 @@ bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type,
 /** Changes the value of an option. */
 bool hedit_option_set(HEdit* hedit, const char* name, const char* newvalue);
 
+
+/** Returns the view with the given name, or NULL if the view does not exist. */
+View* hedit_view_from_name(const char*);
 
 /** Switches to the given view. */
 void hedit_switch_view(HEdit* hedit, enum Views v);

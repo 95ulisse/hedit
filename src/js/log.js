@@ -20,10 +20,10 @@ for (let i in severities) {
         // Forward to the native implementation
         let filename;
         let lineno;
-        if (frame) {
-            filename = frame.getFileName();
+        if (frame && frame.getFileName()) {
+            filename = '' + frame.getFileName();
             filename = filename.substring(filename.lastIndexOf('/') + 1);
-            lineno = frame.getLineNumber();
+            lineno = 0 + frame.getLineNumber();
         } else {
             filename = "<unknown>";
             lineno = 0;

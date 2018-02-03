@@ -49,7 +49,9 @@ static int do_open_file(Tickit *t, TickitEventFlags flags, void *user) {
 
 static int on_tickit_ready(Tickit *t, TickitEventFlags flags, void *user) {
     HEdit* hedit = user;
-    hedit_js_load_user_config(hedit);
+    if (!hedit_js_init(hedit)) {
+        log_fatal("Cannot initialize V8.");
+    }
     event_fire(&hedit->ev_load, hedit);
     return 1;
 }
@@ -81,18 +83,6 @@ int main(int argc, char** argv) {
     // Initialize default actions and keybindings
     if (!hedit_init_actions()) {
         log_fatal("Cannot initialize default actions and bindings.");
-        return 1;
-    }
-
-    // Initialize default commands
-    if (!hedit_init_commands()) {
-        log_fatal("Cannot initialize default commands.");
-        return 1;
-    }
-
-    // Initialize V8
-    if (!hedit_js_init(argc, argv)) {
-        log_fatal("Cannot initialize V8.");
         return 1;
     }
 
