@@ -11,6 +11,9 @@ Object.assign(hedit, {
     get view() {
         return __hedit.view();
     },
+    setTheme(t) {
+        __hedit.setTheme(t);
+    },
     emitKeys(keys) {
         __hedit.emitKeys(keys);
     },

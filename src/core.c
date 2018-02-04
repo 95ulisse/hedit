@@ -227,7 +227,7 @@ void hedit_switch_view(HEdit* hedit, enum Views v) {
 
 
 
-static Theme* init_default_theme() {
+static Theme* default_theme() {
 
     Theme* theme = malloc(sizeof(Theme));
     if (theme == NULL) {
@@ -263,66 +263,23 @@ static Theme* init_default_theme() {
 
 }
 
-static bool free_theme(const char* unused, void* theme, void* unused2) {
-    Theme* t = theme;
-
+static void free_theme(Theme* t) {
     tickit_pen_unref(t->text);
     tickit_pen_unref(t->error);
     tickit_pen_unref(t->highlight1);
     tickit_pen_unref(t->highlight2);
     free(t);
-
-    return true;
 }
 
-bool hedit_register_theme(HEdit* hedit, const char* name, Theme* theme) {
-    
-    if (hedit->themes == NULL && (hedit->themes = map_new()) == NULL) {
-        log_fatal("Cannot allocate memory for map: %s.", strerror(errno));
-        return false;
+void hedit_switch_theme(HEdit* hedit, Theme* newtheme) {
+
+    if (hedit->theme != NULL) {
+        free_theme(hedit->theme);
     }
-
-    if (!map_put(hedit->themes, name, theme)) {
-        log_error("Cannot register theme: %s.", strerror(errno));
-        return false;
-    }
-
-    log_debug("Theme %s registered.", name);
-    return true;
-
-}
-
-void hedit_unregister_theme(HEdit* hedit, const char* name) {
-
-    if (hedit->themes == NULL) {
-        return;
-    }
-
-    Theme* theme = map_delete(hedit->themes, name);
-    if (theme != NULL) {
-        free_theme(NULL, theme, NULL);
-    }
-
-}
-
-bool hedit_switch_theme(HEdit* hedit, const char* name) {
-
-    if (hedit->themes == NULL) {
-        log_error("Cannot find theme %s.", name);
-        return false;
-    }
-
-    Theme* theme = map_get(hedit->themes, name);
-    if (theme == NULL) {
-        log_error("Cannot find theme %s.", name);
-        return false;
-    }
-    
+   
     // Update the pointers and perform a full redraw
-    hedit->theme = theme;
+    hedit->theme = newtheme;
     hedit_redraw(hedit);
-    log_debug("Theme switched to %s.", name);
-    return true;
 
 }
 
@@ -663,14 +620,11 @@ HEdit* hedit_core_init(Options* cli_options, Tickit* tickit) {
     }
 
     // Initialize the default theme
-    Theme* default_theme = init_default_theme();
-    if (default_theme == NULL) {
+    Theme* deftheme = default_theme();
+    if (deftheme == NULL) {
         goto error;
     }
-    if (!hedit_register_theme(hedit, "default", default_theme)) {
-        goto error;
-    }
-    hedit->theme = default_theme;
+    hedit->theme = deftheme;
 
     // Register the handler for the events windows
     hedit->on_keypress_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_KEY, 0, on_keypress, hedit);
@@ -737,10 +691,9 @@ void hedit_core_teardown(HEdit* hedit) {
         hedit_file_close(hedit->file);
     }
 
-    // Free and unregister all the themes
-    if (hedit->themes != NULL) {
-        map_iterate(hedit->themes, free_theme, NULL);
-        map_free(hedit->themes);
+    // Free the theme
+    if (hedit->theme != NULL) {
+        free_theme(hedit->theme);
     }
 
     // Options

@@ -170,6 +170,64 @@ static void Log(const FunctionCallbackInfo<v8::Value>& args) {
     __hedit_log(*file, line, (log_severity) severity, "%s", *contents);
 }
 
+static TickitPen* ParsePen(Local<Context> ctx, Local<Object> obj, const char* name) {
+    HandleScope handle_scope(ctx->GetIsolate());
+    
+    Local<Object> desc = Local<Object>::Cast(obj->Get(ctx, v8_str(name)).ToLocalChecked());
+
+    TickitPen* pen = tickit_pen_new();
+    if (pen == NULL) {
+        log_fatal("Out of memory.");
+        return NULL;
+    }
+
+    int fg = desc->Get(ctx, v8_str("fg")).ToLocalChecked()->Int32Value(ctx).FromJust();
+    int bg = desc->Get(ctx, v8_str("bg")).ToLocalChecked()->Int32Value(ctx).FromJust();
+    bool bold = desc->Get(ctx, v8_str("bold")).ToLocalChecked()->BooleanValue(ctx).FromJust();
+    bool under = desc->Get(ctx, v8_str("under")).ToLocalChecked()->BooleanValue(ctx).FromJust();
+
+    tickit_pen_set_colour_attr(pen, TICKIT_PEN_FG, fg);
+    tickit_pen_set_colour_attr(pen, TICKIT_PEN_BG, bg);
+    tickit_pen_set_bool_attr(pen, TICKIT_PEN_BOLD, bold);
+    tickit_pen_set_bool_attr(pen, TICKIT_PEN_UNDER, under);
+
+    return pen;
+}
+
+// __hedit.setTheme({ pen1: { ... pen attrs ... }, ... });
+static void SetTheme(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 1);
+    assert(args[0]->IsObject());
+
+    Theme* theme = (Theme*) malloc(sizeof(Theme));
+    if (theme == NULL) {
+        log_fatal("Out of memory.");
+        return;
+    }
+
+#define P(name) \
+    do { \
+        TickitPen* pen = ParsePen(ctx, obj, #name); \
+        if (pen == NULL) { \
+            return; \
+        } \
+        theme->name = pen; \
+    } while (false);
+
+    Local<Object> obj = Local<Object>::Cast(args[0]);
+    P(text);
+    P(error);
+    P(highlight1);
+    P(highlight2);
+
+    hedit_switch_theme(hedit, theme);
+}
+
 // __hedit.mode();
 static void GetMode(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
@@ -664,6 +722,7 @@ bool hedit_js_init(HEdit* hedit) {
         Local<ObjectTemplate> obj = ObjectTemplate::New(isolate);
         SET("registerEventBroker", RegisterEventBroker);
         SET("log", Log);
+        SET("setTheme", SetTheme);
         SET("mode", GetMode);
         SET("view", GetView);
         SET("emitKeys", EmitKeys);

@@ -160,7 +160,6 @@ struct HEdit {
     Tickit* tickit;
     TickitWindow* rootwin;
     TickitWindow* viewwin;
-    Map* themes;
     Theme* theme;
     int on_keypress_bind_id;
     int on_resize_bind_id;
@@ -208,14 +207,8 @@ Mode* hedit_mode_from_name(const char*);
 void hedit_switch_mode(HEdit* hedit, enum Modes m);
 
 
-/** Registers a new theme. */
-bool hedit_register_theme(HEdit* hedit, const char* name, Theme* theme);
-
-/** Unregisters a theme and releases all the resources held by it. */
-void hedit_unregister_theme(HEdit* hedit, const char* name);
-
-/** Selectes a new theme and redraws the whole UI. */
-bool hedit_switch_theme(HEdit* hedit, const char* name);
+/** Switches to a new theme and redraws the whole UI. */
+void hedit_switch_theme(HEdit* hedit, Theme* theme);
 
 
 /** Registers a new option. */
