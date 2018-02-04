@@ -242,6 +242,13 @@ static Theme* default_theme() {
         -1
     );
 
+    // Gray line numbers
+    theme->linenos = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 8,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+
     // Bold red for errors
     theme->error = tickit_pen_new_attrs(
         TICKIT_PEN_FG, 1,
@@ -250,24 +257,40 @@ static Theme* default_theme() {
         -1
     );
 
-    // Primary highlight for cursor
-    theme->highlight1 = tickit_pen_clone(theme->text);
-    tickit_pen_set_bool_attr(theme->highlight1, TICKIT_PEN_REVERSE, true);
+    // Full cell for block cursor
+    theme->block_cursor = tickit_pen_clone(theme->text);
+    tickit_pen_set_bool_attr(theme->block_cursor, TICKIT_PEN_REVERSE, true);
 
-    // Secondary highlight
-    theme->highlight2 = tickit_pen_clone(theme->text);
-    tickit_pen_set_bool_attr(theme->highlight2, TICKIT_PEN_BOLD, true);
-    tickit_pen_set_bool_attr(theme->highlight2, TICKIT_PEN_UNDER, true);
+    // Soft cursor is just bold and underline, no background
+    theme->soft_cursor = tickit_pen_clone(theme->text);
+    tickit_pen_set_bool_attr(theme->soft_cursor, TICKIT_PEN_BOLD, true);
+    tickit_pen_set_bool_attr(theme->soft_cursor, TICKIT_PEN_UNDER, true);
+
+    // Statusbar with light background and dark text
+    theme->statusbar = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 234,
+        TICKIT_PEN_BG, 247,
+        -1
+    );
+
+    // Command bar exactly like text
+    theme->commandbar = tickit_pen_clone(theme->text);
 
     return theme;
 
 }
 
 static void free_theme(Theme* t) {
+    if (t != NULL) {
+        return;
+    }
     tickit_pen_unref(t->text);
+    tickit_pen_unref(t->linenos);
     tickit_pen_unref(t->error);
-    tickit_pen_unref(t->highlight1);
-    tickit_pen_unref(t->highlight2);
+    tickit_pen_unref(t->block_cursor);
+    tickit_pen_unref(t->soft_cursor);
+    tickit_pen_unref(t->statusbar);
+    tickit_pen_unref(t->commandbar);
     free(t);
 }
 

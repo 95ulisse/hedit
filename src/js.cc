@@ -221,9 +221,12 @@ static void SetTheme(const FunctionCallbackInfo<v8::Value>& args) {
 
     Local<Object> obj = Local<Object>::Cast(args[0]);
     P(text);
+    P(linenos);
     P(error);
-    P(highlight1);
-    P(highlight2);
+    P(block_cursor);
+    P(soft_cursor);
+    P(statusbar);
+    P(commandbar);
 
     hedit_switch_theme(hedit, theme);
 }

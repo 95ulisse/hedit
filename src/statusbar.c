@@ -49,7 +49,7 @@ void command_visitor(Buffer* buf, size_t pos, const char* str, size_t len, void*
         }
 
         tickit_renderbuffer_savepen(rb);
-        tickit_renderbuffer_setpen(rb, theme->highlight1);
+        tickit_renderbuffer_setpen(rb, theme->block_cursor);
         tickit_renderbuffer_textn(rb, str + cursorpos, 1);
         tickit_renderbuffer_restore(rb);
 
@@ -66,11 +66,11 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
     Statusbar* statusbar = user;
     TickitExposeEventInfo* e = info;
 
-    // Clear
-    tickit_renderbuffer_eraserect(e->rb, &e->rect);
+    // Clear first line
+    tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->statusbar);
+    tickit_renderbuffer_eraserect(e->rb, &(TickitRect){ .top = 0, .left = 0, .lines = 1, .cols = tickit_window_cols(win) });
 
     // Open file info on the right
-    tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->text);
     if (statusbar->hedit->file != NULL) {
         File* f = statusbar->hedit->file;
         size_t len = strlen(hedit_file_name(f)) + (hedit_file_is_ro(f) ? 5 : 0);
@@ -82,25 +82,26 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
     }
 
     // Current mode on the left
-    tickit_renderbuffer_textf_at(e->rb, 0, 0, "-- %s --", statusbar->hedit->mode->display_name);
+    tickit_renderbuffer_textf_at(e->rb, 0, 0, " -- %s --", statusbar->hedit->mode->display_name);
+
+    // Clear second line
+    tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->commandbar);
+    tickit_renderbuffer_eraserect(e->rb, &(TickitRect){ .top = 1, .left = 0, .lines = 1, .cols = tickit_window_cols(win) });
 
     tickit_renderbuffer_goto(e->rb, 1, 0);
 
     // Write the error if present.
     // It should neve happen that we have to show an error while the user is typing a command.
     if (statusbar->show_last_error) {
-        tickit_renderbuffer_savepen(e->rb);
         tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->error);
         tickit_renderbuffer_text(e->rb, statusbar->last_error);
-        tickit_renderbuffer_restore(e->rb);
-
         return 1;
     }
 
     // Draw the command line to reflect the current buffer contents
     Buffer* buf = statusbar->hedit->command_buffer;
     if (buf != NULL) {
-        
+
         tickit_renderbuffer_text(e->rb, ":");
 
         struct command_visitor_params params = {
@@ -113,7 +114,7 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
         // add a fake space just to show the cursor
         if (buffer_get_cursor(buf) == buffer_get_len(buf)) {
             tickit_renderbuffer_savepen(e->rb);
-            tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->highlight1);
+            tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->block_cursor);
             tickit_renderbuffer_text(e->rb, " ");
             tickit_renderbuffer_restore(e->rb);
         }

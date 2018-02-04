@@ -17,8 +17,9 @@
         tickit_renderbuffer_restore(s->rb); \
     } while (false);
 
-#define WITH_HIGHLIGHT1_PEN(block) WITH_PEN(s->hedit->theme->highlight1, block)
-#define WITH_HIGHLIGHT2_PEN(block) WITH_PEN(s->hedit->theme->highlight2, block)
+#define WITH_LINENOS_PEN(block) WITH_PEN(s->hedit->theme->linenos, block)
+#define WITH_CURSOR_PEN(block) WITH_PEN(s->hedit->theme->block_cursor, block)
+#define WITH_SCURSOR_PEN(block) WITH_PEN(s->hedit->theme->soft_cursor, block)
     
 
 /**
@@ -111,7 +112,7 @@ static bool file_visitor(File* f, size_t offset, const unsigned char* data, size
                     skip);
                 for (int j = i - (isfirstline ? s->colwidth - (offset % s->colwidth) : s->colwidth); j < i; j++) {
                     if (s->view_state->cursor_pos == offset + j) {
-                        WITH_HIGHLIGHT2_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
+                        WITH_SCURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
                     } else {
                         tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.');
                     }
@@ -120,7 +121,7 @@ static bool file_visitor(File* f, size_t offset, const unsigned char* data, size
 
             tickit_renderbuffer_goto(s->rb, byte_to_line(s, nextbyte), 0);
             if (s->lineoffset) {
-                tickit_renderbuffer_textf(s->rb, s->line_offset_format, nextbyte);
+                WITH_LINENOS_PEN(tickit_renderbuffer_textf(s->rb, s->line_offset_format, nextbyte));
             }
         }
 
@@ -134,11 +135,11 @@ static bool file_visitor(File* f, size_t offset, const unsigned char* data, size
         tickit_renderbuffer_text(s->rb, " ");
         if (nextbyte == s->view_state->cursor_pos) {
             if (s->view_state->left) {
-                WITH_HIGHLIGHT1_PEN(tickit_renderbuffer_textn(s->rb, buf, 1));
+                WITH_CURSOR_PEN(tickit_renderbuffer_textn(s->rb, buf, 1));
                 tickit_renderbuffer_textn(s->rb, buf + 1, 1);
             } else {
                 tickit_renderbuffer_textn(s->rb, buf, 1);
-                WITH_HIGHLIGHT1_PEN(tickit_renderbuffer_textn(s->rb, buf + 1, 1));
+                WITH_CURSOR_PEN(tickit_renderbuffer_textn(s->rb, buf + 1, 1));
             }
         } else {
             tickit_renderbuffer_text(s->rb, buf);
@@ -163,7 +164,7 @@ static bool file_visitor(File* f, size_t offset, const unsigned char* data, size
             break;
         }
         if (s->view_state->cursor_pos == offset + j) {
-            WITH_HIGHLIGHT2_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
+            WITH_SCURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
         } else {
             tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.');
         }
@@ -188,6 +189,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
 
     // Set the normal pen for the text
     tickit_renderbuffer_setpen(e->rb, hedit->theme->text);
+    tickit_renderbuffer_clear(e->rb);
 
     int lines = tickit_window_lines(win);
     struct file_visitor_state visitor_state = {
@@ -210,6 +212,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
     // Fill the remaining lines with `~`
     int emptylines = lines - (hedit_file_size(hedit->file) / colwidth + 1);
     if (emptylines > 0) {
+        tickit_renderbuffer_setpen(e->rb, hedit->theme->linenos);
         for (int i = 1; i <= emptylines; i++) {
             tickit_renderbuffer_text_at(e->rb, lines - i, 0, "~");
         }

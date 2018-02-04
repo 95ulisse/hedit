@@ -55,12 +55,15 @@ extern Mode hedit_modes[];
 typedef struct Theme Theme;
 struct Theme {
     TickitPen* text;
+    TickitPen* linenos;
     TickitPen* error;
-    TickitPen* highlight1;
-    TickitPen* highlight2;
+    TickitPen* block_cursor;
+    TickitPen* soft_cursor;
+    TickitPen* statusbar;
+    TickitPen* commandbar;
 
-    // When adding a new field to this structure, remember to update the default theme
-    // and the `free_theme` function in core.c.
+    // When adding a new field to this structure, remember to update the default theme and
+    // the `free_theme` function in core.c, and `SetTheme` in js.cc.
 };
 
 
