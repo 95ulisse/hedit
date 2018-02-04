@@ -1,6 +1,6 @@
 # HEdit
 
-HEdit is a simple terminal-based hex editor inspired by VIM.
+HEdit is a simple terminal-based hex editor inspired by VIM and scriptable with JS.
 
 ## Build from source
 
@@ -36,6 +36,7 @@ The build output is in the `out` folder.
 ## Roadmap
 
 - [x] Undo/Redo
+- [x] Scriptability
+- [ ] Write JS docs
 - [ ] Syntax highlighting
-- [ ] Scriptability
 - [ ] Structure view
