@@ -89,14 +89,14 @@ Mode hedit_modes[] = {
     
     [HEDIT_MODE_NORMAL] = {
         .id = HEDIT_MODE_NORMAL,
-        .name = "NORMAL",
+        .name = "normal",
         .display_name = "NORMAL",
         .bindings = NULL
     },
 
     [HEDIT_MODE_INSERT] = {
         .id = HEDIT_MODE_INSERT,
-        .name = "INSERT",
+        .name = "insert",
         .display_name = "INSERT",
         .bindings = NULL,
         .on_input = mode_insert_on_input,
@@ -105,7 +105,7 @@ Mode hedit_modes[] = {
 
     [HEDIT_MODE_REPLACE] = {
         .id = HEDIT_MODE_REPLACE,
-        .name = "REPLACE",
+        .name = "replace",
         .display_name = "REPLACE",
         .bindings = NULL,
         .on_input = mode_replace_on_input,
@@ -114,7 +114,7 @@ Mode hedit_modes[] = {
 
     [HEDIT_MODE_COMMAND] = {
         .id = HEDIT_MODE_COMMAND,
-        .name = "COMMAND",
+        .name = "command",
         .display_name = "NORMAL",
         .bindings = NULL,
         .on_enter = mode_command_on_enter,

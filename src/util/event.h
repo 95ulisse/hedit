@@ -22,7 +22,7 @@ struct __event_handler {
 // and suppress compiler warnings abount mismatching function types.
 #define event_add(ev, f, user) __event_add((ev), (EventHandler)(f), (user)) 
 void* __event_add(Event* ev, EventHandler f, void* user);
-void event_del(Event* ev, void* token);
+void event_del(void* token);
 
 #define event_fire(ev, ...) \
     list_for_each_member(h, ev, struct __event_handler, list) { \

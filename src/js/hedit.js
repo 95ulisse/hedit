@@ -1,9 +1,18 @@
 // All the builtin modules are evaluated in a context where there's a global `__hedit`
 // which acts as a bridge between the JS and the C worlds.
 
-export default {
-    emit(keys) {
-        __hedit.emit(keys);
+import EventEmitter from 'hedit/private/eventemitter';
+
+let hedit = new EventEmitter();
+Object.assign(hedit, {
+    get mode() {
+        return __hedit.mode();
+    },
+    get view() {
+        return __hedit.view();
+    },
+    emitKeys(keys) {
+        __hedit.emitKeys(keys);
     },
     command(cmd) {
         return __hedit.command(cmd);
@@ -26,4 +35,19 @@ export default {
     switchMode(name) {
         __hedit.switchMode(name);
     }
+});
+
+const events = {
+    'load': 'load',
+    'quit': 'quit',
+    'mode_switch': 'modeSwitch',
+    'view_switch': 'viewSwitch'
 };
+
+__hedit.registerEventBroker((name, ...args) => {
+    if (events[name]) {
+        hedit.emit(events[name], ...args);
+    }
+});
+
+export default hedit;

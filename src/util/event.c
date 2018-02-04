@@ -22,7 +22,7 @@ void* __event_add(Event* ev, EventHandler f, void* user) {
 
 }
 
-void event_del(Event* ev, void* token) {
+void event_del(void* token) {
 
     // Remove the handler from the list
     struct __event_handler* handler = token;

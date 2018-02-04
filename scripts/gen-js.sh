@@ -19,9 +19,9 @@ gen_code() {
 #include <js.h>
 EOF
 
-    for x in *.js; do
+    for x in $(find . -name '*.js'); do
         VAR_NAME="$(echo "$x" | tr './' '_')"
-        MODULE_NAME="hedit/$(echo "$VAR_NAME" | sed 's/_js$//')"
+        MODULE_NAME="hedit/$(echo "${x#./}" | sed 's/.js$//')"
         if [[ "$MODULE_NAME" == "hedit/hedit" ]]; then
             MODULE_NAME="hedit"
         fi

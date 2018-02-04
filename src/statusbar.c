@@ -222,10 +222,10 @@ void hedit_statusbar_teardown(Statusbar* statusbar) {
 
     // Detach handlers
     tickit_window_unbind_event_id(statusbar->hedit->rootwin, statusbar->on_resize_bind_id);
-    event_del(&statusbar->hedit->ev_mode_switch, statusbar->on_mode_switch_registration);
-    event_del(&statusbar->hedit->ev_file_open, statusbar->on_file_open_registration);
-    event_del(&statusbar->hedit->ev_file_write, statusbar->on_file_write_registration);
-    event_del(&statusbar->hedit->ev_file_close, statusbar->on_file_close_registration);
+    event_del(statusbar->on_mode_switch_registration);
+    event_del(statusbar->on_file_open_registration);
+    event_del(statusbar->on_file_write_registration);
+    event_del(statusbar->on_file_close_registration);
     log_unregister_sink(statusbar->log_sink_registration);
 
     // Destroy the window and free the memory

@@ -378,7 +378,7 @@ static void on_delete(HEdit* hedit, ssize_t count) {
 
 static View definition = {
     .id = HEDIT_VIEW_EDIT,
-    .name = "Edit",
+    .name = "edit",
     .on_enter = on_enter,
     .on_exit = on_exit,
     .on_draw = on_draw,

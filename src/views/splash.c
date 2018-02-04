@@ -36,7 +36,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
 
 static View definition = {
     .id = HEDIT_VIEW_SPLASH,
-    .name = "Splash",
+    .name = "splash",
     .on_draw = on_draw
 };
 

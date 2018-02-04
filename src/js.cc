@@ -27,6 +27,13 @@ static Isolate* isolate;
 static Persistent<Context> builtin_context;
 static Persistent<Context> user_context;
 
+// Event registrations.
+// In `native_event_registrations` we store the registrations to the native events
+// on the `HEdit` instance, and then, when any of these events fire, we notify all the
+// registered JS functions in `event_brokers`.
+static std::vector<void*> native_event_registrations;
+static std::vector<Global<Function>> event_brokers;
+
 
 
 JsBuiltinModule::JsBuiltinModule(std::string name, const unsigned char* source, unsigned int source_len) :
@@ -77,6 +84,76 @@ static inline const char* c_str(String::Utf8Value& str) {
     return *str != NULL ? *str : "<string conversion failed>";
 }
 
+static void InvokeBrokers(int argc, Local<v8::Value> args[]) {
+    TryCatch tt;
+    for (auto& broker : event_brokers) {
+        if (broker.Get(isolate)->Call(user_context.Get(isolate), Null(isolate), argc, args).IsEmpty()) {
+            Local<v8::Value> ex = tt.Exception();
+            String::Utf8Value str(isolate, ex);
+            log_error("Exception during JS event callback: %s", c_str(str));
+        }
+    }
+}
+
+
+static void NativeEventHandler0(void* user, HEdit* hedit) {
+    
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
+    Local<String> event_name = v8_str((const char*) user);
+    Local<v8::Value> args[] = { event_name };
+
+    InvokeBrokers(1, args);
+}
+
+static void NativeEventHandlerModeSwitch(void* user, HEdit* hedit, Mode* newmode, Mode* oldmode) {
+ 
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
+    Local<String> event_name = v8_str((const char*) user);
+    Local<String> mode_name = v8_str(newmode->name);
+    Local<v8::Value> args[] = { event_name, mode_name };
+
+    InvokeBrokers(2, args);
+}
+
+
+static void NativeEventHandlerViewSwitch(void* user, HEdit* hedit, View* newview, View* oldview) {
+ 
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
+    Local<String> event_name = v8_str((const char*) user);
+    Local<String> view_name = v8_str(newview->name);
+    Local<v8::Value> args[] = { event_name, view_name };
+
+    InvokeBrokers(2, args);
+}
+
+
+// ----------------------------------------------------------------------------------------------------------
+
+
+// __hedit.registerEventBroker(function (eventName, ...args) {})
+static void RegisterEventBroker(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+
+    assert(args.Length() == 1);
+    assert(args[0]->IsFunction());
+
+    Global<Function> f(isolate, Local<Function>::Cast(args[0]));
+    event_brokers.push_back(std::move(f));
+}
+
 // __hedit.log("file", line, severity, "contents");
 static void Log(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
@@ -93,7 +170,29 @@ static void Log(const FunctionCallbackInfo<v8::Value>& args) {
     __hedit_log(*file, line, (log_severity) severity, "%s", *contents);
 }
 
-// __hedit.emit("keys");
+// __hedit.mode();
+static void GetMode(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+
+    args.GetReturnValue().Set(v8_str(hedit->mode->name));
+}
+
+// __hedit.view();
+static void GetView(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+
+    args.GetReturnValue().Set(v8_str(hedit->view->name));
+}
+
+// __hedit.emitKeys("keys");
 static void EmitKeys(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
     HandleScope handle_scope(isolate);
@@ -393,6 +492,14 @@ static MaybeLocal<Module> ModuleResolveCallback(Local<Context> ctx, Local<String
         return MaybeLocal<Module>();
     }
 
+    // Builtin modules inside the `private` folder can be accessed only from other builtin modules
+    if (builtin->GetName().find("hedit/private/", 0) == 0) {
+        if (ctx != builtin_context.Get(isolate)) {
+            isolate->ThrowException(v8_str("Private modules can be requested only by builtin code."));
+            return MaybeLocal<Module>();
+        }
+    }
+
     // Return a cached version of the module, or compile it on the fly
     if (!builtin->GetModule().IsEmpty()) {
         return MaybeLocal<Module>(handle_scope.Escape(builtin->GetModule().Get(isolate)));
@@ -555,8 +662,11 @@ bool hedit_js_init(HEdit* hedit) {
 
         // Build the global `__hedit` object that will be exposed to builtin scripts
         Local<ObjectTemplate> obj = ObjectTemplate::New(isolate);
+        SET("registerEventBroker", RegisterEventBroker);
         SET("log", Log);
-        SET("emit", EmitKeys);
+        SET("mode", GetMode);
+        SET("view", GetView);
+        SET("emitKeys", EmitKeys);
         SET("command", Command);
         SET("registerCommand", RegisterCommand);
         SET("map", MapKeys);
@@ -587,17 +697,48 @@ bool hedit_js_init(HEdit* hedit) {
         user_context.Reset(isolate, user_ctx);
         builtin_context.Reset(isolate, builtin_ctx);
 
+#define REG(name, handler) \
+    do {\
+        void* token = event_add(&hedit->ev_ ## name, handler, (void*) #name); \
+        if (token == NULL) { \
+            log_fatal("Cannot register handler for native event " #name); \
+            return false; \
+        } \
+        native_event_registrations.push_back(token); \
+    } while (false);
+
+        // Register an handler for all the native events
+        REG(load,              NativeEventHandler0);
+        REG(quit,              NativeEventHandler0);
+        REG(mode_switch,       NativeEventHandlerModeSwitch);
+        REG(view_switch,       NativeEventHandlerViewSwitch);
+        REG(file_open,         NativeEventHandler0);
+        REG(file_beforewrite,  NativeEventHandler0);
+        REG(file_write,        NativeEventHandler0);
+        REG(file_close,        NativeEventHandler0);
+
         // Load the user config
         LoadUserConfig();
-    }    
+    }
 
     return true;
 }
 
 void hedit_js_teardown() {
     log_debug("V8 teardown.");
+
+    // Remove event handlers and brokers
+    event_brokers.clear();
+    for (auto& token: native_event_registrations) {
+        event_del(token);
+    }
+    native_event_registrations.clear();
+
+    // Dispose the contexts
     builtin_context.Reset();
     user_context.Reset();
+
+    // Tear down V8
     isolate->Dispose();
     V8::Dispose();
     V8::ShutdownPlatform();
