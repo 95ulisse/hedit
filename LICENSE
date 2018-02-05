@@ -19,5 +19,6 @@ Portions of this software are derived from third-party works:
 
 - src/util/map.[ch]: Taken from the vis project, licensed under the ISC license.
   https://github.com/martanne/vis
+
 - src/js/private/eventemitter.js: Taken from EventEmitter3, licensed under the MIT license.
   https://github.com/primus/eventemitter3
