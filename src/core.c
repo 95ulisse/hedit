@@ -184,14 +184,6 @@ View* hedit_view_from_name(const char* name) {
 void hedit_switch_view(HEdit* hedit, enum Views v) {
     assert(v >= HEDIT_VIEW_SPLASH && v <= HEDIT_VIEW_MAX);
 
-    // If the views have not been initialized yet, do it now
-    if (hedit_views[0].id == 0) {
-#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
-        INIT_VIEW(HEDIT_VIEW_SPLASH);
-        INIT_VIEW(HEDIT_VIEW_EDIT);
-#pragma GCC diagnostic warning "-Wimplicit-function-declaration"
-    }
-
     View* old = hedit->view;
     View* new = &hedit_views[v];
 
@@ -276,6 +268,36 @@ static Theme* default_theme() {
     // Command bar exactly like text
     theme->commandbar = tickit_pen_clone(theme->text);
 
+    // Log highlights
+    theme->log_debug = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 8,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    theme->log_info = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 6,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    theme->log_warn = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 3,
+        TICKIT_PEN_BG, 16,
+        TICKIT_PEN_BOLD, true,
+        -1
+    );
+    theme->log_error = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 1,
+        TICKIT_PEN_BG, 16,
+        TICKIT_PEN_BOLD, true,
+        -1
+    );
+    theme->log_fatal = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 5,
+        TICKIT_PEN_BG, 16,
+        TICKIT_PEN_BOLD, true,
+        -1
+    );
+
     return theme;
 
 }
@@ -291,6 +313,11 @@ static void free_theme(Theme* t) {
     tickit_pen_unref(t->soft_cursor);
     tickit_pen_unref(t->statusbar);
     tickit_pen_unref(t->commandbar);
+    tickit_pen_unref(t->log_debug);
+    tickit_pen_unref(t->log_info);
+    tickit_pen_unref(t->log_warn);
+    tickit_pen_unref(t->log_error);
+    tickit_pen_unref(t->log_fatal);
     free(t);
 }
 
@@ -587,8 +614,17 @@ void hedit_emit_keys(HEdit* hedit, const char* keys) {
             buf[1] = '\0';
         }
 
-        // Check if the key corresponds to an action
-        Action* a = map_get(hedit->mode->bindings, buf);
+        // If the current view exposes an override for this key, use that,
+        // otherwise checks if it is mapped in the current mode
+        Action* a = NULL;
+        if (hedit->view->binding_overrides[hedit->mode->id] != NULL) {
+            a = map_get(hedit->view->binding_overrides[hedit->mode->id], buf);
+        }
+        if (a == NULL) {
+            a = map_get(hedit->mode->bindings, buf);
+        }
+
+        // Invoke the action, or pass the key as raw input
         if (a != NULL) {
             a->cb(hedit, &a->arg);
         } else if (hedit->mode->on_input != NULL) {
@@ -600,6 +636,15 @@ void hedit_emit_keys(HEdit* hedit, const char* keys) {
 }
 
 HEdit* hedit_core_init(Options* cli_options, Tickit* tickit) {
+    
+    // If the views have not been initialized yet, do it now
+    if (hedit_views[0].id == 0) {
+#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
+        INIT_VIEW(HEDIT_VIEW_SPLASH);
+        INIT_VIEW(HEDIT_VIEW_LOG);
+        INIT_VIEW(HEDIT_VIEW_EDIT);
+#pragma GCC diagnostic warning "-Wimplicit-function-declaration"
+    }
 
     // Allocate space for the global state
     HEdit* hedit = calloc(1, sizeof(HEdit));

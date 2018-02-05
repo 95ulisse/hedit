@@ -90,11 +90,16 @@ function expandTheme(t) {
         block_cursor: { fg: 16,  bg: 7,   bool: false, under: false },
         soft_cursor:  { fg: 7,   bg: 16,  bold: true,  under: true  },
         statusbar:    { fg: 234, bg: 247, bold: false, under: false },
-        commandbar:   { fg: 7,   bg: 16,  bool: false, under: false }
+        commandbar:   { fg: 7,   bg: 16,  bool: false, under: false },
+        log_debug:    { fg: 8,   bg: 16,  bold: false, under: false },
+        log_info:     { fg: 6,   bg: 16,  bold: false, under: false },
+        log_warn:     { fg: 3,   bg: 16,  bold: true,  under: false },
+        log_error:    { fg: 1,   bg: 16,  bold: true,  under: false },
+        log_fatal:    { fg: 5,   bg: 16,  bold: true,  under: false }
     };
 
     let penDescriptor = {};
-    const textprops = [ 'text', 'linenos', 'error', 'block_cursor', 'soft_cursor', 'commandbar', 'statusbar' ];
+    const textprops = [ 'text', 'linenos', 'error', 'block_cursor', 'soft_cursor', 'commandbar', 'statusbar', 'log_debug', 'log_info', 'log_warn', 'log_error', 'log_fatal' ];
     for (let k of textprops) {
         penDescriptor[k] = expandPen(t[k], defaultTheme[k]);
     }

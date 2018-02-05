@@ -61,6 +61,11 @@ struct Theme {
     TickitPen* soft_cursor;
     TickitPen* statusbar;
     TickitPen* commandbar;
+    TickitPen* log_debug;
+    TickitPen* log_info;
+    TickitPen* log_warn;
+    TickitPen* log_error;
+    TickitPen* log_fatal;
 
     // When adding a new field to this structure, remember to update the default theme and
     // the `free_theme` function in core.c, and `SetTheme` in js.cc.
@@ -70,6 +75,7 @@ struct Theme {
 
 enum Views {
     HEDIT_VIEW_SPLASH = 1,
+    HEDIT_VIEW_LOG,
     HEDIT_VIEW_EDIT,
     HEDIT_VIEW_MAX
 };
@@ -93,6 +99,7 @@ typedef struct View View;
 struct View {
     enum Views id;
     const char* name;
+    Map* binding_overrides[HEDIT_MODE_MAX]; // Map of Action*
     bool (*on_enter)(HEdit* hedit, View* prev);
     bool (*on_exit)(HEdit* hedit, View* next);
     void (*on_draw)(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e);
@@ -105,8 +112,10 @@ struct View {
 extern View hedit_views[];
 
 #define INIT_VIEW(v) __init_view_##v()
-#define REGISTER_VIEW(id, definition) \
+#define REGISTER_VIEW(id, def) REGISTER_VIEW2(id, def, {})
+#define REGISTER_VIEW2(id, definition, init_block) \
     void __init_view_##id() { \
+        { init_block; } \
         hedit_views[id] = definition; \
     }
 

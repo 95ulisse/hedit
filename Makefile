@@ -52,6 +52,7 @@ OBJECTS = $(OUT)/util/log.o \
 		  $(OUT)/file.o \
 		  $(OUT)/views/splash.o \
 		  $(OUT)/views/edit.o \
+		  $(OUT)/views/log.o \
           $(OUT)/core.o \
           $(OUT)/js.o \
           $(GEN)/js-builtin-modules.o \

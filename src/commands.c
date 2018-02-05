@@ -162,6 +162,11 @@ static bool map(HEdit* hedit, bool force, ArgIterator* args, void* user) {
     return hedit_map_keys(hedit, mode->id, from, to, force);
 }
 
+static bool logview(HEdit* hedit, bool force, ArgIterator* args, void* user) {
+    hedit_switch_view(hedit, HEDIT_VIEW_LOG);
+    return true;
+}
+
 
 
 // ----------------------------------------------------------------------------
@@ -210,6 +215,7 @@ bool hedit_init_commands(HEdit* hedit) {
     REG(wq);
     REG(set);
     REG(map);
+    hedit_command_register(hedit, "log", logview, NULL);
 
     return true;
 

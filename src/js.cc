@@ -227,6 +227,11 @@ static void SetTheme(const FunctionCallbackInfo<v8::Value>& args) {
     P(soft_cursor);
     P(statusbar);
     P(commandbar);
+    P(log_debug);
+    P(log_info);
+    P(log_warn);
+    P(log_error);
+    P(log_fatal);
 
     hedit_switch_theme(hedit, theme);
 }
