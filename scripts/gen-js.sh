@@ -9,6 +9,16 @@ set -o pipefail
 MODULES_FOLDER="$1"
 OUTPUT_FILE="$2"
 
+MINIFIER="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/rjsmin.py"
+
+strLen() {
+    local bytelen sreal oLang=$LANG oLcAll=$LC_ALL
+    LANG=C LC_ALL=C
+    bytelen=${#1}
+    LANG=$oLang LC_ALL=$oLcAll
+    echo $bytelen
+}
+
 gen_code() {
 
     declare -A MODULE_MAP
@@ -20,6 +30,8 @@ gen_code() {
 EOF
 
     for x in $(find . -name '*.js'); do
+
+        # Normalize the name of the variable and the module
         VAR_NAME="$(echo "$x" | tr './' '_')"
         MODULE_NAME="hedit/$(echo "${x#./}" | sed 's/.js$//')"
         if [[ "$MODULE_NAME" == "hedit/hedit" ]]; then
@@ -27,9 +39,18 @@ EOF
         fi
         MODULE_MAP[$MODULE_NAME]="$VAR_NAME"
 
-        xxd -i $x | sed -E 's/unsigned\s+(char|int)/static unsigned \1/'
+        # Minify the source
+        MINIFIED="$("$MINIFIER" <"$x")"
+        MINIFIED_LEN="$(strLen "$MINIFIED")"
+
+        # Emit the declaration
+        echo "static unsigned char $VAR_NAME[] = {"
+        echo "$MINIFIED" | xxd -i
+        echo "};"
+        echo "static unsigned int ${VAR_NAME}_len = $MINIFIED_LEN;"
         
-        echo "Packaged JS module $MODULE_NAME." >&3
+        echo "Packaged JS module $MODULE_NAME ($MINIFIED_LEN bytes)." >&3
+
     done
 
     cat <<EOF

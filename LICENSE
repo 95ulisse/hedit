@@ -22,3 +22,6 @@ Portions of this software are derived from third-party works:
 
 - src/js/private/eventemitter.js: Taken from EventEmitter3, licensed under the MIT license.
   https://github.com/primus/eventemitter3
+
+- scripts/rjsmin.py: fast JS minifier in Python by André Malo, licensed under the Apache 2 license.
+  https://github.com/ndparker/rjsmin
