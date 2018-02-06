@@ -8,16 +8,21 @@
 #include "util/list.h"
 #include "util/log.h"
 
+#define MAX_LOG_ENTRIES 100
+#define MAX_TIMESTAMP_LEN 24
+#define MAX_FILE_LEN 64
+#define MAX_MESSAGE_LEN 512
+
 static const char* severity_names[] = {
     "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"
 };
 
 typedef struct {
-    char timestamp[20];
+    char timestamp[MAX_TIMESTAMP_LEN];
     log_severity severity;
-    const char* file;
+    char file[MAX_FILE_LEN];
     int line;
-    const char* message;
+    char message[MAX_MESSAGE_LEN];
 
     struct list_head list;
 } LogMessage;
@@ -25,7 +30,6 @@ typedef struct {
 typedef struct {
     View* oldview;
     size_t scroll;
-    struct list_head* start_message;
     bool can_scroll_down;
 } ViewState;
 
@@ -51,53 +55,43 @@ static void on_log(void* user, struct log_config* cfg, const char* file, int lin
     struct tm* tm_info;
     time(&t);
     tm_info = localtime(&t);
-    if (strftime((char*) &msg->timestamp, 20, "%Y-%m-%d %H:%M:%S", tm_info) == 0) {
+    if (strftime((char*) &msg->timestamp, MAX_TIMESTAMP_LEN, "%Y-%m-%d %H:%M:%S", tm_info) == 0) {
         // Error formatting the time: do not output the time
         msg->timestamp[0] = '\0'; 
     }
 
-    // Clone the file name
-    const char* filedup = strdup(file);
-    if (filedup == NULL) {
-        goto error;
-    }
-    msg->file = filedup;
+    // Copy the file name
+    strncpy(msg->file, file, MAX_FILE_LEN);
+    msg->file[MAX_FILE_LEN - 1] = '\0';
 
     // Preformat the message
-
-    va_list args_copy;
-    va_copy(args_copy, args);
-    int size = vsnprintf(NULL, 0, format, args_copy);
-    va_end(args_copy);
-    if (size < 0) {
+    if (vsnprintf(msg->message, MAX_MESSAGE_LEN, format, args) < 0) {
         goto error;
     }
+    msg->message[MAX_MESSAGE_LEN - 1] = '\0';
 
-    char* message = malloc(1 + size * sizeof(char));
-    if (message == NULL) {
-        goto error;
-    }
-    msg->message = message;
-
-    size = vsnprintf(message, size + 1, format, args);
-    if (size < 0) {
-        goto error;
-    }
-
+    // Add the message to the global queue
     list_add_tail(&messages, &msg->list);
-    messages_count++;
+    if (messages_count < MAX_LOG_ENTRIES) {
+        messages_count++;
+    } else {
+        LogMessage* first = list_first(&messages, LogMessage, list);
+        list_del(&first->list);
+        free(first);
+    }
 
     return;
 
 error:
     if (msg != NULL) {
-        if (msg->file != NULL) {
-            free((void*) msg->file);
-        }
-        if (msg->message != NULL) {
-            free((void*) msg->message);
-        }
         free(msg);
+    }
+}
+
+static void on_program_exit() {
+    // Free all the stored messages
+    list_for_each_member(m, &messages, LogMessage, list) {
+        free(m);
     }
 }
 
@@ -134,21 +128,21 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
 
     int win_lines = tickit_window_lines(win);
     size_t line = 0;
+    size_t skip = 0;
 
-    if (messages_count > 0) {
-        state->start_message = state->start_message == NULL ? messages.next : state->start_message;
+    list_for_each_member(m, &messages, LogMessage, list) {
+        if (skip < state->scroll) {
+            skip++;
+            continue;
+        }
 
-        for (struct list_head* pos = state->start_message; pos != &messages; pos = pos->next) {
-            LogMessage* m = container_of(pos, LogMessage, list);
-    
-            tickit_renderbuffer_setpen(e->rb, severity_pen[m->severity]);
-            tickit_renderbuffer_textf_at(e->rb, line, 0, "%s %s %s:%d %s",
-                m->timestamp, severity_names[m->severity], m->file, m->line, m->message);
-            line++;
+        tickit_renderbuffer_setpen(e->rb, severity_pen[m->severity]);
+        tickit_renderbuffer_textf_at(e->rb, line, 0, "%s %s %s:%d %s",
+            m->timestamp, severity_names[m->severity], m->file, m->line, m->message);
+        line++;
 
-            if (line == win_lines) {
-                break;
-            }
+        if (line == win_lines) {
+            break;
         }
     }
     
@@ -168,23 +162,14 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
 static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
     ViewState* state = hedit->viewdata;
 
-    if (messages_count == 0 || state->start_message == NULL) {
-        return;
-    }
-    
-    struct list_head* top = state->start_message;
-
     switch (m) {
         case HEDIT_MOVEMENT_UP:
-            if (messages.next != top) {
-                assert(state->scroll > 0);
-                state->start_message = top->prev;
+            if (state->scroll > 0) {
                 state->scroll--;
             }
             break;
         case HEDIT_MOVEMENT_DOWN:
             if (state->can_scroll_down) {
-                state->start_message = top->next;
                 state->scroll++;
             }
             break;
@@ -235,5 +220,8 @@ REGISTER_VIEW2(HEDIT_VIEW_LOG, definition, {
         log_fatal("Out of memory.");
         return;
     }
+    
+    // Register an handler for the program exit to clean up all the stored messages
+    atexit(on_program_exit);
 
 })
