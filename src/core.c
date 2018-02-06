@@ -303,7 +303,7 @@ static Theme* default_theme() {
 }
 
 static void free_theme(Theme* t) {
-    if (t != NULL) {
+    if (t == NULL) {
         return;
     }
     tickit_pen_unref(t->text);

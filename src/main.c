@@ -123,8 +123,8 @@ int main(int argc, char** argv) {
 
     // Tear down everything
     int exitcode = hedit->exitcode;
-    hedit_core_teardown(hedit);
     hedit_js_teardown();
+    hedit_core_teardown(hedit);
     tickit_unref(tickit);
     log_teardown();
     return exitcode;
