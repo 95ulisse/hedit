@@ -114,11 +114,17 @@ release: _OPT=$(OPTFLAGS)
 release: hedit
 
 # JS docs
-.PHONY: docs docs-clean
+.PHONY: docs docs-clean docs-publish
 docs:
 	(cd ./docs && npm i && ./node_modules/.bin/jsdoc -c jsdoc.json)
 docs-clean:
 	rm -rf ./docs/out ./docs/node_modules
+docs-publish: docs
+	git checkout gh-pages
+	cp -R ./docs/out/* .
+	git add .
+	(git commit -m "Documentation update." && git push origin gh-pages) || true
+	git checkout master
 
 
 # --------------------------------------------------------------------
