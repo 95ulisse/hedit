@@ -1,0 +1,14 @@
+/* Hide logo and footer */
+
+.logo,
+footer {
+    display: none !important;
+}
+
+#lnb {
+    bottom: 0 !important;
+}
+
+#main {
+    margin-bottom: 0 !important;
+}
