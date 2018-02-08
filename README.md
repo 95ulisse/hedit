@@ -33,10 +33,24 @@ $ make
 
 The build output is in the `out` folder.
 
+## Documentation
+
+There's some documentation available for the JavaScript APIs.
+
+To build the docs, you need [Node](https://nodejs.org) installed, then issue:
+
+```
+make docs
+```
+
+The docs will be in `docs/out`.
+
+Template by [NHN Entertainment Corp](https://github.com/nhnent/tui.jsdoc-template).
+
 ## Roadmap
 
 - [x] Undo/Redo
 - [x] Scriptability
-- [ ] Write JS docs
+- [X] Write JS docs
 - [ ] Syntax highlighting
 - [ ] Structure view

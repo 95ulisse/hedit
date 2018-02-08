@@ -1,0 +1,24 @@
+{
+    "plugins": [ "plugins/markdown" ],
+    "source": {
+        "include": [ "../src/js" ],
+        "exclude": [ "../src/js/private/" ]
+    },
+    "opts": {
+        "destination": "./out",
+        "recurse": true,
+        "readme": "./pages/index.md",
+        "tutorials": "./pages/examples",
+        "template": "./node_modules/tui-jsdoc-template"
+    },
+    "templates": {
+        "default": {
+            "staticFiles": {
+                "include": [ "./styles" ]
+            }
+        },
+        "css": [
+            "custom.css"
+        ]
+    }
+}

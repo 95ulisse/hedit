@@ -164,7 +164,7 @@ struct HEdit {
     Event ev_mode_switch;        // void (*)(HEdit*, Mode* new, Mode* old)
     Event ev_view_switch;        // void (*)(HEdit*, View* new, View* old)
     Event ev_file_open;          // void (*)(HEdit*, File*)
-    Event ev_file_beforewrite;   // void (*)(HEdit*, File*)
+    Event ev_file_before_write;  // void (*)(HEdit*, File*)
     Event ev_file_write;         // void (*)(HEdit*, File*)
     Event ev_file_close;         // void (*)(HEdit*, File*)
 

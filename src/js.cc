@@ -775,14 +775,14 @@ bool hedit_js_init(HEdit* hedit) {
     } while (false);
 
         // Register an handler for all the native events
-        REG(load,              NativeEventHandler0);
-        REG(quit,              NativeEventHandler0);
-        REG(mode_switch,       NativeEventHandlerModeSwitch);
-        REG(view_switch,       NativeEventHandlerViewSwitch);
-        REG(file_open,         NativeEventHandler0);
-        REG(file_beforewrite,  NativeEventHandler0);
-        REG(file_write,        NativeEventHandler0);
-        REG(file_close,        NativeEventHandler0);
+        REG(load,               NativeEventHandler0);
+        REG(quit,               NativeEventHandler0);
+        REG(mode_switch,        NativeEventHandlerModeSwitch);
+        REG(view_switch,        NativeEventHandlerViewSwitch);
+        REG(file_open,          NativeEventHandler0);
+        REG(file_before_write,  NativeEventHandler0);
+        REG(file_write,         NativeEventHandler0);
+        REG(file_close,         NativeEventHandler0);
 
         // Load the user config
         LoadUserConfig();

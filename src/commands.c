@@ -99,7 +99,7 @@ static bool write(HEdit* hedit, bool force, ArgIterator* args, void* user) {
         name = hedit_file_name(hedit->file);
     }
 
-    event_fire(&hedit->ev_file_beforewrite, hedit, hedit->file);
+    event_fire(&hedit->ev_file_before_write, hedit, hedit->file);
     bool res = hedit_file_save(hedit->file, name, SAVE_MODE_AUTO);
     if (res) {
         event_fire(&hedit->ev_file_write, hedit, hedit->file);

@@ -113,6 +113,13 @@ debug: hedit
 release: _OPT=$(OPTFLAGS)
 release: hedit
 
+# JS docs
+.PHONY: docs docs-clean
+docs:
+	(cd ./docs && npm i && ./node_modules/.bin/jsdoc -c jsdoc.json)
+docs-clean:
+	rm -rf ./docs/out ./docs/node_modules
+
 
 # --------------------------------------------------------------------
 # Utilities

@@ -661,7 +661,7 @@ HEdit* hedit_core_init(Options* cli_options, Tickit* tickit) {
     event_init(&hedit->ev_mode_switch);
     event_init(&hedit->ev_view_switch);
     event_init(&hedit->ev_file_open);
-    event_init(&hedit->ev_file_beforewrite);
+    event_init(&hedit->ev_file_before_write);
     event_init(&hedit->ev_file_write);
     event_init(&hedit->ev_file_close);
 

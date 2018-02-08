@@ -1,3 +1,8 @@
+/**
+ * General set of functions to programmatically interact with HEdit.
+ * @module hedit
+ */
+
 // All the builtin modules are evaluated in a context where there's a global `__hedit`
 // which acts as a bridge between the JS and the C worlds.
 
@@ -64,7 +69,7 @@ function expandPen(pen, defaults) {
 
 }
 
-/**
+/*
  * The user can represent themes with a wide variety of shortcuts,
  * but the final form of the descriptor that we have to pass to the native method is as follows:
  *
@@ -80,6 +85,7 @@ function expandPen(pen, defaults) {
  * The user can also specify colors in hex, which means that we have to convert them
  * to terminal colors.
  */
+
 function expandTheme(t) {
 
     // Default theme
@@ -109,39 +115,165 @@ function expandTheme(t) {
 
 let hedit = new EventEmitter();
 Object.assign(hedit, {
+
+    /**
+     * The name of the mode the editor is currently in.
+     * @type {string}
+     */
     get mode() {
         return __hedit.mode();
     },
+
+    /**
+     * The name of the currently active view.
+     * @type {string}
+     */
     get view() {
         return __hedit.view();
     },
+
+    /**
+     * Sets the current theme.
+     *
+     * A theme determines the colors used by the editor to render itself.
+     * Different parts of the UI can be drawn with different pens, which contains the actual
+     * style information. For example, to draw the line offsets bold green and text blue, we can use:
+     *
+     * ```
+     * {
+     *     linenos: { fg: '00ff00', bold: true },
+     *     text: '0000ff' // Shortcut for `{ fg: '0000ff' }`
+     * }
+     * ```
+     *
+     * The following parts of the UI can be themed:
+     * - `text`
+     * - `linenos`
+     * - `error`
+     * - `block_cursor`
+     * - `soft_cursor`
+     * - `statusbar`
+     * - `commandbar`
+     * - `log_debug`
+     * - `log_info`
+     * - `log_warn`
+     * - `log_error`
+     * - `log_fatal`
+     *
+     * Each of these parts can be themed with a pen, which has 4 properties:
+     * - `fg`
+     * - `bg`
+     * - `bold`
+     * - `under`
+     *
+     * Colors can be specified either using standard ANSI number or hex RGB values,
+     * which will be rounded to the closest color supported by the terminal.
+     *
+     * If any of the previous properties is missing, the default value will be used.
+     *
+     * For an example of the usage of `setTheme`, see {@tutorial colorful-statusbar}.
+     *
+     * @param {object} t - Theme description.
+     * @throws Throws if an invalid theme description is passed.
+     * @see Usage example: {@tutorial colorful-statusbar}.
+     */
     setTheme(t) {
         __hedit.setTheme(expandTheme(t));
     },
+
+    /**
+     * Emits the given keys as if the user actually typed them.
+     *
+     * @alias module:hedit.emitKeys
+     * @param {string} keys - Keys to emit.
+     *
+     * @example
+     * hedit.emitKeys('<Escape>:w<Enter>i');
+     */
     emitKeys(keys) {
         __hedit.emitKeys(keys);
     },
+
+    /**
+     * Executes a command.
+     * @param {string} cmd - Command to execute.
+     * @return {boolean} Returns `true` if the command executed successfully, `false` otherwise.
+     *
+     * @example
+     * hedit.command('q!'); // Exits the editor
+     */
     command(cmd) {
         return __hedit.command(cmd);
     },
+
+    /**
+     * Handler of a custom command.
+     * @callback CommandCallback
+     * @param {...string} args - All the commands supplied by the user at the moment
+              of the invocation of the command.
+     */
+
+    /**
+     * Registers a new command, whose implementation is up to the user.
+     * @param {string} name - Command name.
+     * @param {CommandCallback} handler - Function implementing the command.
+     * @throws Throws if the command registration fails.
+     *
+     * @example
+     * hedit.registerCommand('special', n => {
+     *     log.info('The argument is', parseInt(n, 10) % 2 == 0 ? 'even' : 'odd');
+     * });
+     */
     registerCommand(name, handler) {
         if (!__hedit.registerCommand(name, handler)) {
             throw new Error('Command registration failed.');
         }
     },
+
+    /**
+     * Registers a new key mapping.
+     * @param {string} mode - Mode the new mapping is valid in.
+     * @param {string} from - Key to map.
+     * @param {string} to - The key sequence that the `from` key will be expanded to.
+     * @param {boolean} [force = false] - Skip the check for an existing mapping for the same key.
+     * @throws Throws if the mapping registration fails.
+     * @see [emitKeys]{@link module:hedit.emitKeys} for more information about the format of the keys.
+     *
+     * @example
+     * hedit.map('insert', '<C-j>', 'cafebabe');
+     */
     map(mode, from, to, force = false) {
         if (!__hedit.map(mode, from, to, !!force)) {
             throw new Error('Key mapping registration failed.');
         }
     },
+
+    /**
+     * Sets the value of an option.
+     * @param {string} name - Option name.
+     * @param {string|number} value - Value of the option.
+     * @throws Throws if there's an error setting the option.
+     *
+     * @example
+     * hedit.set('colwidth', 8);
+     */
     set(name, value) {
         if (!__hedit.set(name, value)) {
             throw new Error(`Failed to set option ${name}.`);
         }
     },
+
+    /**
+     * Switches the editor to the given mode.
+     * @param {string} name - Name of the mode to switch to.
+     *
+     * @example
+     * hedit.switchMode('insert');
+     */
     switchMode(name) {
         __hedit.switchMode(name);
     }
+
 });
 
 const events = {
@@ -156,5 +288,27 @@ __hedit.registerEventBroker((name, ...args) => {
         hedit.emit(events[name], ...args);
     }
 });
+
+/**
+ * Event raised only once when the editor is fully loaded and ready.
+ * @event load
+ */
+
+/**
+ * Event raised only once when the editor is going to close.
+ * @event quit
+ */
+
+/**
+ * Event raised when the user switches mode.
+ * @param {string} mode - New mode set.
+ * @event modeSwitch
+ */
+
+/**
+ * Event raised when the user switches view.
+ * @param {string} view - New active view.
+ * @event viewSwitch
+ */
 
 export default hedit;
