@@ -35,9 +35,9 @@ The build output is in the `out` folder.
 
 ## Documentation
 
-There's some documentation available for the JavaScript APIs.
+There's some documentation available for the JavaScript APIs at https://95ulisse.github.io/hedit.
 
-To build the docs, you need [Node](https://nodejs.org) installed, then issue:
+To build the docs locally, you need [Node](https://nodejs.org) installed, then issue:
 
 ```
 make docs
