@@ -1,8 +1,10 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Tutorial: A colorful statusbar | Tutorial: A colorful statusbar</title>
+    <title>Source: statusbar.js | Source: statusbar.js</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -28,7 +30,7 @@
         
     </div>
     <div class="title">
-        <h1><a href="index.html" class="link">Tutorial: A colorful statusbar</a></h1>
+        <h1><a href="index.html" class="link">Source: statusbar.js</a></h1>
         
     </div>
     <div class="search-container" id="search-container">
@@ -52,34 +54,42 @@
 <div class="main" id="main">
     
 
-<section>
-    <header>
-        
 
-        <h2>A colorful statusbar</h2>
-    </header>
 
     
-        <article class="readme">
-            <p>Using themes and events, we can have our statusbar change color depending on the current mode we are in.</p>
-<pre class="prettyprint source lang-js"><code>// Import the main hedit builtin module
-import hedit from 'hedit';
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * General set of functions to programmatically interact with the statusbar.
+ * @module hedit/statusbar
+ */
 
-// Change the color of the statusbar depending on the current mode.
-// Colors can be both hex and standard ANSI numbers.
-const map = {
-    normal: 247,       // The default gray-ish color
-    insert: '0066cc',  // A light blue
-    replace: 'ff875f'  // A soft orange
-};
-hedit.on('modeSwitch', (mode) => {
-    hedit.setTheme({
-        statusbar: { bg: map[mode] || map.normal }
-    });
-});</code></pre><p>Save the previous script to <code>~/.heditrc</code> and restart HEdit.</p>
+export default {
+    
+    /**
+     * Shows a message on the statusbar.
+     * @param {string} message - Message to show.
+     * @param {boolean} [sticky = false] - `true` if the message should persist between mode changes.
+     * @see [hideMessage]{@link module:hedit/statusbar.hideMessage} to hide a sticky message.
+     *
+     * @example
+     * statusbar.showMessage("Hello world!");
+     */
+    showMessage(message, sticky = false) {
+        __hedit.statusbar_showMessage(message, sticky);
+    },
+
+    /**
+     * Hides the currently visible message.
+     */
+    hideMessage() {
+        __hedit.statusbar_hideMessage();
+    }
+
+};</code></pre>
         </article>
-    
-</section>
+    </section>
+
 
 
 
@@ -95,7 +105,13 @@ hedit.on('modeSwitch', (mode) => {
 <script src="scripts/linenumber.js"></script>
 
     <script>
-        showLnbExamples();
+        var id = '_sub'.replace(/"/g, '_');
+        var selectedApi = document.getElementById(id); // do not use jquery selector
+        var $selectedApi = $(selectedApi);
+
+        $selectedApi.removeClass('hidden');
+        $selectedApi.parent().find('.glyphicon').removeClass('glyphicon-plus').addClass('glyphicon-minus');
+        showLnbApi();
     </script>
 
 </body>

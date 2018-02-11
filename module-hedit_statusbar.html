@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Tutorial: A colorful statusbar | Tutorial: A colorful statusbar</title>
+    <title>Module: hedit/statusbar | Module: hedit/statusbar</title>
 
     <script src="scripts/prettify/prettify.js"> </script>
     <script src="scripts/prettify/lang-css.js"> </script>
@@ -28,7 +28,7 @@
         
     </div>
     <div class="title">
-        <h1><a href="index.html" class="link">Tutorial: A colorful statusbar</a></h1>
+        <h1><a href="index.html" class="link">Module: hedit/statusbar</a></h1>
         
     </div>
     <div class="search-container" id="search-container">
@@ -52,34 +52,426 @@
 <div class="main" id="main">
     
 
+
+
+
 <section>
-    <header>
+
+<header>
+    
+        <h2>hedit/statusbar</h2>
+        
+            
+        
+    
+</header>
+
+<article>
+    
+        <div class="container-overview">
+        
+            
+                <div class="description"><p>General set of functions to programmatically interact with the statusbar.</p></div>
+            
+
+            
+                
+
+<dt>
+    
+</dt>
+<dd>
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+    
+
+</dd>
+
+            
+        
+        </div>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+        <h3 class="subsection-title">Methods</h3>
+
+        <dl>
+                
+
+<dt>
+    
+        <h4 class="name" id=".hideMessage">
+            
+                <span class="type-signature"><span class="icon green">static</span> </span>hideMessage<span class="signature">()</span><span class="type-signature"></span>
+                
+            
+            <div class="container-source members">
+                <code><a href="statusbar.js.html">statusbar.js</a></code>,
+                <code><a href="statusbar.js.html#line24">line 24</a></code>
+            </div>
+            
+        </h4>
+
+        
+    
+</dt>
+<dd>
+
+    
+    <div class="description">
+        <p>Hides the currently visible message.</p>
+    </div>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+    
+
+</dd>
+
+            
+                
+
+<dt>
+    
+        <h4 class="name" id=".showMessage">
+            
+                <span class="type-signature"><span class="icon green">static</span> </span>showMessage<span class="signature">(message, sticky<span class="signature-attributes">opt</span>)</span><span class="type-signature"></span>
+                
+            
+            <div class="container-source members">
+                <code><a href="statusbar.js.html">statusbar.js</a></code>,
+                <code><a href="statusbar.js.html#line17">line 17</a></code>
+            </div>
+            
+        </h4>
+
+        
+    
+</dt>
+<dd>
+
+    
+    <div class="description">
+        <p>Shows a message on the statusbar.</p>
+    </div>
+    
+
+    
+
+    
+
+    
+
+    
+    <div class="container-params">
+        <h5>Parameters:</h5>
+        
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
         
 
-        <h2>A colorful statusbar</h2>
-    </header>
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>message</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>Message to show.</p></td>
+        </tr>
 
     
-        <article class="readme">
-            <p>Using themes and events, we can have our statusbar change color depending on the current mode we are in.</p>
-<pre class="prettyprint source lang-js"><code>// Import the main hedit builtin module
-import hedit from 'hedit';
 
-// Change the color of the statusbar depending on the current mode.
-// Colors can be both hex and standard ANSI numbers.
-const map = {
-    normal: 247,       // The default gray-ish color
-    insert: '0066cc',  // A light blue
-    replace: 'ff875f'  // A soft orange
-};
-hedit.on('modeSwitch', (mode) => {
-    hedit.setTheme({
-        statusbar: { bg: map[mode] || map.normal }
-    });
-});</code></pre><p>Save the previous script to <code>~/.heditrc</code> and restart HEdit.</p>
-        </article>
+        <tr>
+            
+                <td class="name"><code>sticky</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    false
+                
+                </td>
+            
+
+            <td class="description last"><p><code>true</code> if the message should persist between mode changes.</p></td>
+        </tr>
+
     
+    </tbody>
+</table>
+
+    </div>
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-see">See:</dt>
+    <dd class="tag-see">
+        <ul>
+            <li><p><a href="module-hedit_statusbar.html#.hideMessage">hideMessage</a> to hide a sticky message.</p></li>
+        </ul>
+    </dd>
+    
+
+    
+</dl>
+
+
+    
+        <h5>Example</h5>
+        
+    <pre class="prettyprint"><code>statusbar.showMessage("Hello world!");</code></pre>
+
+    
+
+</dd>
+
+            </dl>
+    
+
+    
+
+    
+</article>
+
 </section>
+
 
 
 
@@ -95,7 +487,13 @@ hedit.on('modeSwitch', (mode) => {
 <script src="scripts/linenumber.js"></script>
 
     <script>
-        showLnbExamples();
+        var id = 'module:hedit/statusbar_sub'.replace(/"/g, '_');
+        var selectedApi = document.getElementById(id); // do not use jquery selector
+        var $selectedApi = $(selectedApi);
+
+        $selectedApi.removeClass('hidden');
+        $selectedApi.parent().find('.glyphicon').removeClass('glyphicon-plus').addClass('glyphicon-minus');
+        showLnbApi();
     </script>
 
 </body>
