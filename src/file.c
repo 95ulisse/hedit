@@ -617,8 +617,8 @@ static bool hedit_file_save_atomic(File* file, const char* path) {
             goto error;
         }
 
-        // The rename method does not work if the target file is a symbolic or hard link
-        if (S_ISLNK(oldstat.st_mode) || oldstat.st_nlink > 1) {
+        // The rename method does not work if the target is not a regular file or if it is a hard link
+        if (!S_ISREG(oldstat.st_mode) || oldstat.st_nlink > 1) {
 			goto error;
         }
     }
