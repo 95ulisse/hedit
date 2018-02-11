@@ -540,6 +540,32 @@ static void FileDelete(const FunctionCallbackInfo<v8::Value>& args) {
     }
 }
 
+// __hedit.statusbar_showMessage(msg, sticky);
+static void StatusbarShowMessage(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 2);
+
+    String::Utf8Value message(isolate, args[0]);
+    bool sticky = args[1]->BooleanValue(ctx).FromJust();
+
+    hedit_statusbar_show_message(hedit->statusbar, sticky, *message);
+}
+
+// __hedit.statusbar_hideMessage();
+static void StatusbarHideMessage(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 0);
+
+    hedit_statusbar_show_message(hedit->statusbar, false, NULL);
+}
+
 
 // ----------------------------------------------------------------------------------------------------------
 
@@ -748,6 +774,8 @@ bool hedit_js_init(HEdit* hedit) {
         SET("file_commit", FileCommit);
         SET("file_insert", FileInsert);
         SET("file_delete", FileDelete);
+        SET("statusbar_showMessage", StatusbarShowMessage);
+        SET("statusbar_hideMessage", StatusbarHideMessage);
         Local<ObjectTemplate> builtin_global = ObjectTemplate::New(isolate);
         builtin_global->Set(v8_str("__hedit"), obj);
 

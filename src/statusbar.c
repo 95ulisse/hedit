@@ -9,13 +9,15 @@
 #include "util/log.h"
 #include "util/event.h"
 
-#define LAST_ERROR_SIZE 256
+#define MAX_MESSAGE_LEN 512
 
 struct Statusbar {
     HEdit* hedit;
     TickitWindow* win;
-    char last_error[LAST_ERROR_SIZE];
-    bool show_last_error;
+    char last_message[MAX_MESSAGE_LEN];
+    bool last_message_is_error;
+    bool last_message_is_sticky;
+    bool show_last_message;
 
     // Registrations
     int on_resize_bind_id;
@@ -90,15 +92,8 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
 
     tickit_renderbuffer_goto(e->rb, 1, 0);
 
-    // Write the error if present.
-    // It should neve happen that we have to show an error while the user is typing a command.
-    if (statusbar->show_last_error) {
-        tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->error);
-        tickit_renderbuffer_text(e->rb, statusbar->last_error);
-        return 1;
-    }
-
-    // Draw the command line to reflect the current buffer contents
+    // Draw the command line to reflect the current buffer contents.
+    // It should never happen that we have to show an error while the user is typing a command.
     Buffer* buf = statusbar->hedit->command_buffer;
     if (buf != NULL) {
 
@@ -118,6 +113,13 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
             tickit_renderbuffer_text(e->rb, " ");
             tickit_renderbuffer_restore(e->rb);
         }
+
+    } else if (statusbar->show_last_message) {
+
+        // Draw the message
+        tickit_renderbuffer_setpen(e->rb, statusbar->last_message_is_error ? statusbar->hedit->theme->error : statusbar->hedit->theme->text);
+        tickit_renderbuffer_text(e->rb, statusbar->last_message);
+
     }
 
     return 1;
@@ -149,7 +151,9 @@ static void on_mode_switch(void* user, HEdit* hedit, Mode* new, Mode* old) {
     Statusbar* statusbar = user;
 
     // Hide the last error
-    statusbar->show_last_error = false;
+    if (!statusbar->last_message_is_sticky) {
+        statusbar->show_last_message = false;
+    }
 
     // Force a redraw of the statusbar window
     tickit_window_expose(statusbar->win, NULL);
@@ -170,9 +174,11 @@ static void on_log_message(void* user, struct log_config* config, const char* fi
     Statusbar* statusbar = user;
 
     // Print the message to the internal buffer
-    vsnprintf(statusbar->last_error, LAST_ERROR_SIZE, format, args);
-    statusbar->last_error[LAST_ERROR_SIZE - 1] = '\0';
-    statusbar->show_last_error = true;
+    vsnprintf(statusbar->last_message, MAX_MESSAGE_LEN, format, args);
+    statusbar->last_message[MAX_MESSAGE_LEN - 1] = '\0';
+    statusbar->last_message_is_error = true;
+    statusbar->last_message_is_sticky = false;
+    statusbar->show_last_message = true;
 
     // Force a redraw
     tickit_window_expose(statusbar->win, NULL);
@@ -187,7 +193,8 @@ Statusbar* hedit_statusbar_init(HEdit* hedit) {
         return NULL;
     }
     statusbar->hedit = hedit;
-    statusbar->show_last_error = false;
+    statusbar->show_last_message = false;
+    statusbar->last_message_is_error = false;
 
     // Create a new window for the statusbar
     TickitRect rootgeom = tickit_window_get_geometry(hedit->rootwin);
@@ -238,4 +245,18 @@ void hedit_statusbar_teardown(Statusbar* statusbar) {
 
 void hedit_statusbar_redraw(Statusbar* statusbar) {
     tickit_window_expose(statusbar->win, NULL);
+}
+
+void hedit_statusbar_show_message(Statusbar* statusbar, bool sticky, const char* msg) {
+    if (msg == NULL) {
+        statusbar->show_last_message = false;
+    } else {
+        strncpy(statusbar->last_message, msg, MAX_MESSAGE_LEN);
+        statusbar->last_message[MAX_MESSAGE_LEN - 1] = '\0';
+        statusbar->last_message_is_error = false;
+        statusbar->last_message_is_sticky = sticky;
+        statusbar->show_last_message = true;
+    }
+
+    hedit_statusbar_redraw(statusbar);
 }

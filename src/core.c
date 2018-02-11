@@ -25,6 +25,9 @@ static bool mode_command_on_enter(HEdit* hedit, Mode* prev) {
     }
     hedit->command_buffer = b;
 
+    // Hide any previous message shown on the statusbar
+    hedit_statusbar_show_message(hedit->statusbar, false, NULL);
+
     return true;
 }
 

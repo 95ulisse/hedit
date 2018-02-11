@@ -20,6 +20,9 @@ void hedit_statusbar_teardown(Statusbar* statusbar);
 /** Forces a redraw of the statusbar. */
 void hedit_statusbar_redraw(Statusbar* statusbar);
 
+/** Shows a custom message on the statusbar. */
+void hedit_statusbar_show_message(Statusbar* statusbar, bool sticky, const char* msg);
+
 
 #ifdef __cplusplus
 }
