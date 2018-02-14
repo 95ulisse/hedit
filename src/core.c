@@ -344,7 +344,7 @@ void hedit_switch_theme(HEdit* hedit, Theme* newtheme) {
 
 
 bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type, const Value default_value,
-                           bool (*on_change)(HEdit*, Option*, const Value*))
+                           bool (*on_change)(HEdit*, Option*, const Value*, void* user), void* user)
 {
     assert(type >= HEDIT_OPTION_TYPE_INT && type <= HEDIT_OPTION_TYPE_MAX);
 
@@ -358,6 +358,7 @@ bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type,
     opt->default_value = default_value;
     opt->value = default_value;
     opt->on_change = on_change;
+    opt->user = user;
 
     if (!map_put(hedit->options, name, opt)) {
         log_fatal("Out of memory.");
@@ -411,25 +412,56 @@ bool hedit_option_set(HEdit* hedit, const char* name, const char* newstr) {
             }
             break;
 
+        case HEDIT_OPTION_TYPE_STRING:
+        {    
+            
+            // Argument is required
+            if (newstr == NULL) {
+                log_error("Value required.");
+                return false;
+            }
+
+            // Every value is fine for a raw string
+            char* dup = strdup(newstr);
+            if (dup == NULL) {
+                log_fatal("Out of memory.");
+                return false;
+            }
+            newvalue.str = dup;
+
+            break;
+        }
+
         default:
-            assert(false);
+            abort();
 
     }
 
     // Invoke the callback and change the option
-    if (opt->on_change != NULL && !opt->on_change(hedit, opt, &newvalue)) {
+    if (opt->on_change != NULL && !opt->on_change(hedit, opt, &newvalue, opt->user)) {
         log_error("Invalid value %s for option %s.", newstr, name);
+        
+        // Free the allocated duplicate string
+        if (opt->type == HEDIT_OPTION_TYPE_STRING) {
+            free(newvalue.str);
+        }
+
         return false;
     }
-    opt->value = newvalue;
 
+    // Before updating the option value, free the old string
+    if (opt->type == HEDIT_OPTION_TYPE_STRING) {
+        free(opt->value.str);
+    }
+
+    opt->value = newvalue;
     log_debug("New value for option %s: %s", name, newstr);
 
     return true;
 
 }
 
-static bool option_colwidth(HEdit* hedit, Option* opt, const Value* v) {
+static bool option_colwidth(HEdit* hedit, Option* opt, const Value* v, void* user) {
     if (v->i <= 0) {
         return false;
     } else {
@@ -438,7 +470,7 @@ static bool option_colwidth(HEdit* hedit, Option* opt, const Value* v) {
     }
 }
 
-static bool option_lineoffset(HEdit* hedit, Option* opt, const Value* v) {
+static bool option_lineoffset(HEdit* hedit, Option* opt, const Value* v, void* user) {
     hedit_redraw(hedit);
     return true;
 }
@@ -453,7 +485,7 @@ static bool init_builtin_options(HEdit* hedit) {
     // Register all the options!
 
 #define REG(name, type, def, on_change) \
-    if (!hedit_option_register(hedit, name, HEDIT_OPTION_TYPE_##type, (const Value) def, on_change)) { \
+    if (!hedit_option_register(hedit, name, HEDIT_OPTION_TYPE_##type, (const Value) def, on_change, NULL)) { \
         return false; \
     }
 

@@ -124,6 +124,7 @@ extern View hedit_views[];
 enum OptionType {
     HEDIT_OPTION_TYPE_INT = 1,
     HEDIT_OPTION_TYPE_BOOL,
+    HEDIT_OPTION_TYPE_STRING,
     HEDIT_OPTION_TYPE_MAX
 };
 
@@ -134,7 +135,8 @@ struct Option {
     enum OptionType type;
     Value default_value;
     Value value;
-    bool (*on_change)(HEdit*, Option*, const Value*);
+    bool (*on_change)(HEdit*, Option*, const Value*, void* user);
+    void* user;
 };
 
 
@@ -225,7 +227,7 @@ void hedit_switch_theme(HEdit* hedit, Theme* theme);
 
 /** Registers a new option. */
 bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type, const Value default_value,
-                           bool (*on_change)(HEdit*, Option*, const Value*));
+                           bool (*on_change)(HEdit*, Option*, const Value*, void* user), void* user);
 
 /** Changes the value of an option. */
 bool hedit_option_set(HEdit* hedit, const char* name, const char* newvalue);

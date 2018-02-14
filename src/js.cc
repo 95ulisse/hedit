@@ -381,6 +381,101 @@ static void SetOption(const FunctionCallbackInfo<v8::Value>& args) {
     args.GetReturnValue().Set(hedit_option_set(hedit, *name, *value));
 }
 
+// __hedit.get("name");
+static void GetOption(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 1);
+
+    String::Utf8Value name(isolate, args[0]);
+
+    // Retrive the option
+    Option* opt = (Option*) map_get(hedit->options, *name);
+    if (opt == NULL) {
+        isolate->ThrowException(
+            String::Concat(v8_str("Unknown option: "), args[0]->ToString(ctx).ToLocalChecked())
+        );
+        return;
+    }
+
+    // Native options have a simple primitive type
+    Local<v8::Value> ret;
+    switch (opt->type) {
+        case HEDIT_OPTION_TYPE_INT:
+            ret = Integer::New(isolate, opt->value.i);
+            break;
+        case HEDIT_OPTION_TYPE_BOOL:
+            ret = Boolean::New(isolate, opt->value.b);
+            break;
+        case HEDIT_OPTION_TYPE_STRING:
+            ret = String::NewFromUtf8(isolate, opt->value.str);
+            break;
+        default:
+            abort();
+    }
+
+    args.GetReturnValue().Set(ret);
+}
+
+static bool JsOptionHandler(HEdit* hedit, Option* opt, const ::Value* v, void* user) {
+    auto handler = (Persistent<Function>*) user;
+    
+    // Enter the js user context
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = user_context.Get(isolate);
+    Context::Scope context_scope(ctx);
+
+    // Delegate to the JS handler
+    TryCatch tt;
+    Local<v8::Value> ret;
+    Local<v8::Value> args[] = { v8_str(v->str) };
+    MaybeLocal<v8::Value> maybeRet = handler->Get(isolate)->Call(ctx, Null(isolate), 1, args);
+    if (!maybeRet.ToLocal(&ret)) {
+        Local<v8::Value> ex = tt.Exception();
+        String::Utf8Value str(isolate, ex);
+        log_error("Exception during JS option callback: %s", c_str(str));
+        return false;
+    }
+
+    return ret->BooleanValue(ctx).FromMaybe(false);
+}
+
+// __hedit.registerOption("name", "defaultValue", handler);
+static void RegisterOption(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 3);
+
+    if (!args[2]->IsFunction()) {
+        isolate->ThrowException(v8_str("Expected function."));
+        return;
+    }
+
+    String::Utf8Value name(isolate, args[0]);
+    String::Utf8Value defaultValue(isolate, args[1]);
+    Persistent<Function>* handler = new Persistent<Function>(isolate, Local<Function>::Cast(args[2]));
+
+    // Duplicate the default string value
+    char* dup = strdup(*defaultValue);
+
+    ::Value v = { 0, false, dup };
+    bool res = hedit_option_register(hedit, *name, HEDIT_OPTION_TYPE_STRING, v, JsOptionHandler, handler);
+    args.GetReturnValue().Set(res);
+
+    if (!res) {
+        free(dup);
+        handler->Reset();
+        delete handler;
+    }
+}
+
+
 // __hedit.switchMode("mode");
 static void SwitchMode(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
@@ -764,6 +859,8 @@ bool hedit_js_init(HEdit* hedit) {
         SET("registerCommand", RegisterCommand);
         SET("map", MapKeys);
         SET("set", SetOption);
+        SET("get", GetOption);
+        SET("registerOption", RegisterOption);
         SET("switchMode", SwitchMode);
         SET("file_isOpen", FileIsOpen);
         SET("file_name", FileName);

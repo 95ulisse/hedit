@@ -225,8 +225,48 @@ Object.assign(hedit, {
      * });
      */
     registerCommand(name, handler) {
+        if (typeof handler !== 'function') {
+            throw new Error('Handler must be a function.');
+        }
         if (!__hedit.registerCommand(name, handler)) {
             throw new Error('Command registration failed.');
+        }
+    }, 
+
+    /**
+     * Handler of a custom option.
+     * @callback OptionCallback
+     * @param {string} newValue - New value of the option.
+     * @return {boolean} Returns `true` if the change is accepted, `false` otherwise.
+     */
+
+    /**
+     * Registers a new option, whose implementation is up to the user.
+     * @param {string} name - Name of the option.
+     * @param {string} defaultValue - Default option value.
+     * @param {OptionCallback} handler - Function to be called when the value of the option changes.
+     * @thorws Throws if the option registration fails.
+     *
+     * @example
+     * hedit.registerOption('cool', false, newValue => {
+     *     if (newValue === 'true') {
+     *         log.info('The coolness is now on!');
+     *         return true;
+     *     } else if (newValue === 'false') {
+     *         log.info('So sad :(');
+     *         return true;
+     *     } else {
+     *         // Invalid value
+     *         return false;
+     *     }
+     * });
+     */
+    registerOption(name, defaultValue, handler) {
+        if (typeof handler !== 'function') {
+            throw new Error('Handler must be a function.');
+        }
+        if (!__hedit.registerOption(name, defaultValue, handler)) {
+            throw new Error('Option registration failed.');
         }
     },
 
@@ -261,6 +301,18 @@ Object.assign(hedit, {
         if (!__hedit.set(name, value)) {
             throw new Error(`Failed to set option ${name}.`);
         }
+    },
+
+    /** Retrives the value of an option.
+     * @param {string} name - Option name.
+     * @return {*} The current value of the option.
+     * @throws Throws if the option name is invalid.
+     *
+     * @example
+     * log.info('Current colwidth:', hedit.get('colwidth'));
+     */
+    get(name) {
+        return __hedit.get(name);
     },
 
     /**
