@@ -461,15 +461,11 @@ static void RegisterOption(const FunctionCallbackInfo<v8::Value>& args) {
     String::Utf8Value defaultValue(isolate, args[1]);
     Persistent<Function>* handler = new Persistent<Function>(isolate, Local<Function>::Cast(args[2]));
 
-    // Duplicate the default string value
-    char* dup = strdup(*defaultValue);
-
-    ::Value v = { 0, false, dup };
+    ::Value v = { 0, false, *defaultValue };
     bool res = hedit_option_register(hedit, *name, HEDIT_OPTION_TYPE_STRING, v, JsOptionHandler, handler);
     args.GetReturnValue().Set(res);
 
     if (!res) {
-        free(dup);
         handler->Reset();
         delete handler;
     }

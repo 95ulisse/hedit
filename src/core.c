@@ -353,6 +353,15 @@ bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type,
         log_fatal("Out of memory.");
         return false;
     }
+
+    if (!map_put(hedit->options, name, opt)) {
+        if (errno == ENOMEM) {
+            log_fatal("Out of memory.");
+        }
+        free(opt);
+        return false;
+    }
+
     opt->name = name;
     opt->type = type;
     opt->default_value = default_value;
@@ -360,12 +369,20 @@ bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type,
     opt->on_change = on_change;
     opt->user = user;
 
-    if (!map_put(hedit->options, name, opt)) {
-        log_fatal("Out of memory.");
-        free(opt);
-        return false;
+    // Duplicate the default value if the type of the option is a string
+    if (type == HEDIT_OPTION_TYPE_STRING) {
+        char* dup = strdup(default_value.str);
+        char* dup2 = strdup(default_value.str);
+        if (dup == NULL || dup2 == NULL) {
+            log_fatal("Out of memory.");
+            map_delete(hedit->options, name);
+            free(opt);
+            return false;
+        }
+        opt->default_value = (Value){ .str = dup };
+        opt->value = (Value){ .str = dup2 };
     }
-
+    
     return true;
 }
 
@@ -459,6 +476,16 @@ bool hedit_option_set(HEdit* hedit, const char* name, const char* newstr) {
 
     return true;
 
+}
+
+static bool free_option(const char* key, void* value, void* data) {
+    Option* opt = value;
+    if (opt->type == HEDIT_OPTION_TYPE_STRING) {
+        free(opt->default_value.str);
+        free(opt->value.str);
+    }
+    free(opt);
+    return true;
 }
 
 static bool option_colwidth(HEdit* hedit, Option* opt, const Value* v, void* user) {
@@ -800,7 +827,8 @@ void hedit_core_teardown(HEdit* hedit) {
     }
 
     // Options
-    map_free_full(hedit->options);
+    map_iterate(hedit->options, free_option, NULL);
+    map_free(hedit->options);
 
     // Commands
     map_free_full(hedit->commands);
