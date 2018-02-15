@@ -412,6 +412,11 @@ bool hedit_option_set(HEdit* hedit, const char* name, const char* newstr) {
                 return false;
             }
 
+            // Stop here if the value did not actually change
+            if (newvalue.i == opt->value.i) {
+                return true;
+            }
+
             break;
 
         case HEDIT_OPTION_TYPE_BOOL:
@@ -427,18 +432,28 @@ bool hedit_option_set(HEdit* hedit, const char* name, const char* newstr) {
                 log_error("Invalid value %s for option %s.", newstr, name);
                 return false;
             }
+            
+            // Stop here if the value did not actually change
+            if (newvalue.b == opt->value.b) {
+                return true;
+            }
+
             break;
 
         case HEDIT_OPTION_TYPE_STRING:
         {    
-            
             // Argument is required
             if (newstr == NULL) {
                 log_error("Value required.");
                 return false;
             }
 
-            // Every value is fine for a raw string
+            // Stop here if the value did not actually change
+            if (strcmp(newstr, opt->value.str) == 0) {
+                return true;
+            }
+
+            // Duplicate the string for storage
             char* dup = strdup(newstr);
             if (dup == NULL) {
                 log_fatal("Out of memory.");
