@@ -1,0 +1,14 @@
+diff --git a/include/tickit.h b/include/tickit.h
+index 7c22de0..66991a9 100644
+--- a/include/tickit.h
++++ b/include/tickit.h
+@@ -6,7 +6,9 @@ extern "C" {
+ #define __TICKIT_H__
+ 
+ /* We'd quite like the timer*() functions */
++#ifndef _DEFAULT_SOURCE
+ #define _DEFAULT_SOURCE
++#endif
+ 
+ #include <stdlib.h>
+ #include <stdarg.h>

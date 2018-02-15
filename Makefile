@@ -72,6 +72,7 @@ all: release
 
 .PHONY: libtickit
 libtickit:
+	(cd $(DEPS)/libtickit && patch -N -p1 < ../libtickit.patch) || true
 	$(MAKE) -C $(DEPS)/libtickit
 
 .PHONY: v8
