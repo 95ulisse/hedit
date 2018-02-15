@@ -72,12 +72,12 @@ all: release
 
 .PHONY: libtickit
 libtickit:
-	(cd $(DEPS)/libtickit && patch -N -p1 < ../libtickit.patch) || true
+	cd $(DEPS)/libtickit && (patch -N -p1 < ../libtickit.patch || true)
 	$(MAKE) -C $(DEPS)/libtickit
 
 .PHONY: v8
 v8:
-	(cd $(DEPS) && ./build-v8.sh $(V8_VERSION) $(V8_ARCH))
+	./scripts/build-v8.sh "$(DEPS)" "$(V8_VERSION)" "$(V8_ARCH)"
 
 
 # --------------------------------------------------------------------
