@@ -58,7 +58,7 @@ OBJECTS = $(OUT)/util/log.o \
           $(GEN)/js-builtin-modules.o \
           $(OUT)/main.o
 
-JS_MODULES = $(wildcard $(SRC)/js/*.js)
+JS_MODULES = $(shell find $(SRC)/js -type f -name '*.js')
 
 
 # Default task

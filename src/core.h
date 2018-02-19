@@ -9,6 +9,7 @@ typedef struct HEdit HEdit;
 #include "options.h"
 #include "statusbar.h"
 #include "file.h"
+#include "format.h"
 #include "util/common.h"
 #include "util/map.h"
 #include "util/event.h"
@@ -66,6 +67,14 @@ struct Theme {
     TickitPen* log_warn;
     TickitPen* log_error;
     TickitPen* log_fatal;
+    TickitPen* white;
+    TickitPen* gray;
+    TickitPen* blue;
+    TickitPen* red;
+    TickitPen* pink;
+    TickitPen* green;
+    TickitPen* purple;
+    TickitPen* orange;
 
     // When adding a new field to this structure, remember to update the default theme and
     // the `free_theme` function in core.c, and `SetTheme` in js.cc.
@@ -155,6 +164,7 @@ struct HEdit {
     Map* commands; // Map of Command*
     Mode* mode;
     File* file;
+    Format* format;
     View* view;
     void* viewdata; // Private state of the current view
     Statusbar* statusbar;

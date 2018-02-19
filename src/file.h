@@ -11,6 +11,9 @@ extern "C" {
 /** Opaque structure representing an open file. */
 typedef struct File File;
 
+/** Opaque structure representing an iterator over a range of a file. */
+typedef struct FileIterator FileIterator;
+
 enum FileSaveMode {
     SAVE_MODE_AUTO = 0,
     SAVE_MODE_ATOMIC,
@@ -64,6 +67,23 @@ bool hedit_file_read_byte(File*, size_t offset, unsigned char* out);
  * The visitor function may be called more than once with different parts of the file.
  */
 bool hedit_file_visit(File*, size_t start, size_t len, bool (*visitor)(File*, size_t offset, const unsigned char* data, size_t len, void* user), void* user);
+
+/**
+ * Returns an iterator over the given section of a file.
+ * Altering the contents of the file while an iterator is open will result in undefined behaviour.
+ */
+FileIterator* hedit_file_iter(File*, size_t start, size_t len);
+
+/**
+ * Advances the iterator.
+ * Returns `true` if there's more data to read, and `*data` and `*len` will contain
+ * a pointer to the data and its length. Returns `false` and does not alter the pointers
+ * if no more data is available.
+ */
+bool hedit_file_iter_next(FileIterator*, const unsigned char** data, size_t* len);
+
+/** Releases all the resources held by the given iterator. */
+void hedit_file_iter_free(FileIterator*);
 
 
 #ifdef __cplusplus

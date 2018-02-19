@@ -5,8 +5,7 @@
 
 import EventEmitter from 'hedit/private/eventemitter';
 
-let file = new EventEmitter();
-Object.assign(file, {
+class File extends EventEmitter {
 
     /**
      * Returns a boolean indicating whether a file is currently open or not.
@@ -14,23 +13,23 @@ Object.assign(file, {
      */
     get isOpen() {
         return __hedit.file_isOpen();
-    },
+    }
 
     /**
      * Returns the name of the currently open file, or `null` if no file is open.
      * @type {?string}
      */
     get name() {
-        return file.isOpen ? __hedit.file_name() : null;
-    },
+        return this.isOpen ? __hedit.file_name() : null;
+    }
 
     /**
      * Returns the size in bytes of the currently open file, or `-1` if no file is open.
      * @type {number}
      */
     get size() {
-        return file.isOpen ? __hedit.file_size() : -1;
-    },
+        return this.isOpen ? __hedit.file_size() : -1;
+    }
 
     /**
      * Returns a value indicating whether any modification to the file has been done
@@ -38,24 +37,24 @@ Object.assign(file, {
      * @type {boolean}
      */
     get isDirty() {
-        return file.isOpen && __hedit.file_isDirty();
-    },
+        return this.isOpen && __hedit.file_isDirty();
+    }
 
     /**
      * Reverts the last change applied to the currently open file.
      * @return {boolean} Returns `true` if the file changed, `false` otherwise.
      */
     undo() {
-        return file.isOpen && __hedit.file_undo();
-    },
+        return this.isOpen && __hedit.file_undo();
+    }
 
     /**
      * Reapplies the last undone change to the currently open file.
      * @return {boolean} Returns `true` if the file changed, `false` otherwise.
      */
     redo() {
-        return file.isOpen && __hedit.file_redo();
-    },
+        return this.isOpen && __hedit.file_redo();
+    }
 
     /**
      * Commits a new revision to the currently open file.
@@ -67,8 +66,8 @@ Object.assign(file, {
      * @return {boolean} Returns `true` if the commit succeeded.
      */
     commit() {
-        return file.isOpen && __hedit.file_commit();
-    },
+        return this.isOpen && __hedit.file_commit();
+    }
 
     /**
      * Inserts new data into the currently open file.
@@ -77,8 +76,8 @@ Object.assign(file, {
      * @return {boolean} Returns `true` if the insertion succeeded.
      */
     insert(pos, data) {
-        return file.isOpen && __hedit.file_insert(0 + pos, data);
-    },
+        return this.isOpen && __hedit.file_insert(0 + pos, data);
+    }
 
     /**
      * Deletes a portion of the currently open file.
@@ -87,10 +86,12 @@ Object.assign(file, {
      * @return {boolean} Returns `true` if the deletion succeeded.
      */
     delete(pos, len) {
-        return file.isOpen && __hedit.file_delete(0 + pos, 0 + len);
+        return this.isOpen && __hedit.file_delete(0 + pos, 0 + len);
     }
 
-});
+};
+
+const file = new File();
 
 __hedit.registerEventBroker((name, ...args) => {
     if (name.indexOf('file_') == 0) {

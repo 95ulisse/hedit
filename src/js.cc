@@ -34,6 +34,18 @@ static Persistent<Context> user_context;
 static std::vector<void*> native_event_registrations;
 static std::vector<Global<Function>> event_brokers;
 
+// JS function to guess the format of a file.
+// All the file format implementation is pushed to the JS side.
+static Global<Function> format_guess_function;
+
+
+
+// Forward declarations
+static inline Local<String> v8_str(const char* str);
+static inline Local<String> v8_str(const char* str, size_t len);
+static MaybeLocal<Module> EvalModule(const char* origin_str, const Persistent<Context>& ctx, const char* contents, size_t len);
+static MaybeLocal<Module> EvalModule(Local<String> origin_str, const Persistent<Context>& ctx, const char* contents, size_t len);
+
 
 
 JsBuiltinModule::JsBuiltinModule(std::string name, const unsigned char* source, unsigned int source_len) :
@@ -64,9 +76,31 @@ size_t JsBuiltinModule::GetSourceLen() {
     return _source_len;
 }
 
-Persistent<Module>& JsBuiltinModule::GetModule() {
+Persistent<Module>& JsBuiltinModule::GetHandle() {
     return _module;
 }
+
+bool JsBuiltinModule::Eval(Isolate* isolate) {
+    HandleScope handle_scope(isolate);
+
+    if (!this->GetHandle().IsEmpty()) {
+        return true;
+    } else {
+        MaybeLocal<Module> m = EvalModule(
+            String::Concat(v8_str("builtin:"), v8_str(this->GetName().c_str())),
+            builtin_context,
+            this->GetSource(),
+            this->GetSourceLen()
+        );
+        if (!m.IsEmpty()) {
+            this->GetHandle().Reset(isolate, m.ToLocalChecked());
+            return true;
+        } else {
+            return false;
+        }
+    }
+}
+
 
 
 // ----------------------------------------------------------------------------------------------------------
@@ -142,7 +176,35 @@ static void NativeEventHandlerViewSwitch(void* user, HEdit* hedit, View* newview
 // ----------------------------------------------------------------------------------------------------------
 
 
-// __hedit.registerEventBroker(function (eventName, ...args) {})
+// __hedit.require("module");
+static void Require(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+
+    assert(args.Length() == 1);
+
+    String::Utf8Value name(isolate, args[0]);
+
+    // Here we take a shortcut and skip some checks, since the `__hedit` object
+    // is visible only to the builtin modules
+
+    std::shared_ptr<JsBuiltinModule> builtin = JsBuiltinModule::FromName(std::string(*name));
+    if (builtin == nullptr) {
+        isolate->ThrowException(String::Concat(v8_str("Cannot resolve module "), args[0]->ToString(ctx).ToLocalChecked()));
+        return;
+    }
+
+    if (!builtin->Eval(isolate)) {
+        isolate->ThrowException(String::Concat(v8_str("Error evaluating module "), args[0]->ToString(ctx).ToLocalChecked()));
+        return;
+    }
+
+    args.GetReturnValue().Set(builtin->GetHandle().Get(isolate)->GetModuleNamespace());
+
+}
+
+// __hedit.registerEventBroker(function (eventName, ...args) {});
 static void RegisterEventBroker(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
     HandleScope handle_scope(isolate);
@@ -152,6 +214,17 @@ static void RegisterEventBroker(const FunctionCallbackInfo<v8::Value>& args) {
 
     Global<Function> f(isolate, Local<Function>::Cast(args[0]));
     event_brokers.push_back(std::move(f));
+}
+
+// __hedit.registerFormatGuessFunction(f);
+static void RegisterFormatGuessFunction(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+
+    assert(args.Length() == 1);
+    assert(args[0]->IsFunction());
+
+    format_guess_function = Global<Function>(isolate, Local<Function>::Cast(args[0]));
 }
 
 // __hedit.log("file", line, severity, "contents");
@@ -232,6 +305,14 @@ static void SetTheme(const FunctionCallbackInfo<v8::Value>& args) {
     P(log_warn);
     P(log_error);
     P(log_fatal);
+    P(white);
+    P(gray);
+    P(blue);
+    P(red);
+    P(pink);
+    P(green);
+    P(purple);
+    P(orange);
 
     hedit_switch_theme(hedit, theme);
 }
@@ -631,6 +712,29 @@ static void FileDelete(const FunctionCallbackInfo<v8::Value>& args) {
     }
 }
 
+// __hedit.file_setFormat(format);
+static void FileSetFormat(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 1);
+
+    if (hedit->file == NULL) {
+        return;
+    }
+    
+    // Expect an array here
+    if (!args[0]->IsArray()) {
+        isolate->ThrowException(v8_str("Expected array."));
+        return;
+    }
+
+    JsFormat* format = new JsFormat(isolate, ctx, Local<Array>::Cast(args[0]));
+    hedit_set_format(hedit, format);
+}
+
 // __hedit.statusbar_showMessage(msg, sticky);
 static void StatusbarShowMessage(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
@@ -661,9 +765,6 @@ static void StatusbarHideMessage(const FunctionCallbackInfo<v8::Value>& args) {
 // ----------------------------------------------------------------------------------------------------------
 
 
-static MaybeLocal<Module> EvalModule(const char* origin_str, const Persistent<Context>& ctx, const char* contents, size_t len);
-static MaybeLocal<Module> EvalModule(Local<String> origin_str, const Persistent<Context>& ctx, const char* contents, size_t len);
-
 static MaybeLocal<Module> ModuleResolveCallback(Local<Context> ctx, Local<String> specifier, Local<Module> referrer) {
     EscapableHandleScope handle_scope(isolate);
 
@@ -683,22 +784,11 @@ static MaybeLocal<Module> ModuleResolveCallback(Local<Context> ctx, Local<String
         }
     }
 
-    // Return a cached version of the module, or compile it on the fly
-    if (!builtin->GetModule().IsEmpty()) {
-        return MaybeLocal<Module>(handle_scope.Escape(builtin->GetModule().Get(isolate)));
+    // Evaluate and return the module
+    if (builtin->Eval(isolate)) {
+        return MaybeLocal<Module>(handle_scope.Escape(builtin->GetHandle().Get(isolate)));
     } else {
-        MaybeLocal<Module> m = EvalModule(
-            String::Concat(v8_str("builtin:"), v8_str(builtin->GetName().c_str())),
-            builtin_context,
-            builtin->GetSource(),
-            builtin->GetSourceLen()
-        );
-        if (!m.IsEmpty()) {
-            builtin->GetModule().Reset(isolate, m.ToLocalChecked());
-            return MaybeLocal<Module>(handle_scope.Escape(m.ToLocalChecked()));
-        } else {
-            return MaybeLocal<Module>();
-        }
+        return MaybeLocal<Module>();
     }
 
 }
@@ -845,7 +935,9 @@ bool hedit_js_init(HEdit* hedit) {
 
         // Build the global `__hedit` object that will be exposed to builtin scripts
         Local<ObjectTemplate> obj = ObjectTemplate::New(isolate);
+        SET("require", Require);
         SET("registerEventBroker", RegisterEventBroker);
+        SET("registerFormatGuessFunction", RegisterFormatGuessFunction);
         SET("log", Log);
         SET("setTheme", SetTheme);
         SET("mode", GetMode);
@@ -867,6 +959,7 @@ bool hedit_js_init(HEdit* hedit) {
         SET("file_commit", FileCommit);
         SET("file_insert", FileInsert);
         SET("file_delete", FileDelete);
+        SET("file_setFormat", FileSetFormat);
         SET("statusbar_showMessage", StatusbarShowMessage);
         SET("statusbar_hideMessage", StatusbarHideMessage);
         Local<ObjectTemplate> builtin_global = ObjectTemplate::New(isolate);
@@ -905,6 +998,11 @@ bool hedit_js_init(HEdit* hedit) {
         REG(file_write,         NativeEventHandler0);
         REG(file_close,         NativeEventHandler0);
 
+        // Execute the builtin initializer
+        if (!JsBuiltinModule::FromName("hedit/private/__init")->Eval(isolate)) {
+            abort();
+        }
+
         // Load the user config
         LoadUserConfig();
     }
@@ -921,6 +1019,7 @@ void hedit_js_teardown() {
         event_del(token);
     }
     native_event_registrations.clear();
+    format_guess_function.Reset();
 
     // Dispose the contexts
     builtin_context.Reset();
@@ -931,4 +1030,119 @@ void hedit_js_teardown() {
     V8::Dispose();
     V8::ShutdownPlatform();
     delete create_params.array_buffer_allocator;
+}
+
+void hedit_set_format(HEdit* hedit, Format* format) {
+    if (hedit->format != NULL) {
+        delete hedit->format;
+    }
+    hedit->format = format;
+    hedit_redraw(hedit);
+}
+
+void hedit_format_guess(HEdit* hedit) {
+
+    assert(hedit->file != NULL);    
+
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
+    TryCatch tt;
+    Local<v8::Value> ret;
+    if (!format_guess_function.Get(isolate)->Call(user_context.Get(isolate), Null(isolate), 0, {}).ToLocal(&ret)) {
+        Local<v8::Value> ex = tt.Exception();
+        String::Utf8Value str(isolate, ex);
+        log_error("Exception during JS format guessing: %s", c_str(str));
+        return;
+    }
+
+    // The JS function returns a string with the name of the format to use:
+    // use that name to set the value of the `format` option.
+    String::Utf8Value name(isolate, ret);
+    hedit_option_set(hedit, "format", *name);
+
+}
+
+void hedit_format_free(Format* format) {
+    delete format;
+}
+
+FormatIterator* hedit_format_iter(Format* format, size_t from) {
+    HandleScope handle_scope(isolate);
+    return format->Iterator(from);
+}
+
+FormatSegment* hedit_format_iter_current(FormatIterator* it) {
+    return it->Current();
+}
+
+FormatSegment* hedit_format_iter_next(FormatIterator* it) {
+    return it->Next();
+}
+
+void hedit_format_iter_free(FormatIterator* it) {
+    delete it;
+}
+
+JsFormatIterator* JsFormat::Iterator(size_t from) {
+    HandleScope handle_scope(_isolate);
+
+    Local<Context> ctx = _ctx.Get(_isolate);
+    Local<Array> arr = _arr.Get(_isolate);
+
+    // Return the first segment containing the indicated point.
+    // This assumes that the intervals do not overlap.
+    unsigned int i;
+    for (i = 0; i < arr->Length(); i++) {
+        auto seg = Local<Object>::Cast(arr->Get(ctx, i).ToLocalChecked());
+        size_t to = (size_t) seg->Get(ctx, v8_str("to")).ToLocalChecked()->IntegerValue(ctx).FromJust();
+        if (to >= from) {
+            break;
+        }
+    }
+
+    return new JsFormatIterator(_isolate, this, i);
+}
+
+FormatSegment* JsFormatIterator::Next() {
+
+    // Return NULL if we reached the end
+    if (_index >= _format->GetSegmentsCount()) {
+        return NULL;
+    }
+
+    HandleScope handle_scope(_isolate);
+
+    Local<v8::Object> seg = _format->GetSegment(_index);
+    _index++;
+
+    // Start unpacking the properties of the JS object in the native structure
+    Local<Context> ctx = user_context.Get(isolate);
+    String::Utf8Value name(isolate, seg->Get(ctx, v8_str("name")).ToLocalChecked());
+    strncpy((char*) &_currentName, *name, MAX_SEGMENT_NAME_LEN);
+    _currentName[MAX_SEGMENT_NAME_LEN - 1] = '\0';
+    _current.from = (size_t) seg->Get(ctx, v8_str("from")).ToLocalChecked()->IntegerValue(ctx).FromJust();
+    _current.to = (size_t) seg->Get(ctx, v8_str("to")).ToLocalChecked()->IntegerValue(ctx).FromJust();
+    _current.color = (int) seg->Get(ctx, v8_str("color")).ToLocalChecked()->IntegerValue(ctx).FromJust();
+
+    _initialized = true;
+    return &_current;
+
+}
+
+FormatSegment* JsFormatIterator::Current() {
+
+    // Return NULL if we reached the end
+    if (_index >= _format->GetSegmentsCount()) {
+        return NULL;
+    }
+
+    // Call `Next()` if the iterator has never been initialized
+    if (!_initialized) {
+        return this->Next();
+    }
+
+    return &_current;
 }

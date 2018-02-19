@@ -16,7 +16,8 @@ public:
     const std::string& GetName();
     const char* GetSource();
     size_t GetSourceLen();
-    v8::Persistent<v8::Module>& GetModule();
+    v8::Persistent<v8::Module>& GetHandle();
+    bool Eval(v8::Isolate*);
 
     static std::shared_ptr<JsBuiltinModule> FromName(std::string name);
 

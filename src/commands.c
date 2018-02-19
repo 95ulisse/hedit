@@ -5,6 +5,7 @@
 #include "core.h"
 #include "commands.h"
 #include "file.h"
+#include "format.h"
 #include "util/log.h"
 #include "util/map.h"
 #include "util/event.h"
@@ -56,6 +57,7 @@ static bool edit(HEdit* hedit, bool force, ArgIterator* args, void* user) {
     }
 
     hedit->file = f;
+    hedit_format_guess(hedit);
     event_fire(&hedit->ev_file_open, hedit, hedit->file);
 
     hedit_switch_view(hedit, HEDIT_VIEW_EDIT);

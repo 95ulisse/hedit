@@ -22,6 +22,7 @@ strLen() {
 gen_code() {
 
     declare -A MODULE_MAP
+    TOTAL_MINIFIED=0
 
     cat <<EOF
 #include <memory>
@@ -42,6 +43,7 @@ EOF
         # Minify the source
         MINIFIED="$("$MINIFIER" <"$x")"
         MINIFIED_LEN="$(strLen "$MINIFIED")"
+        TOTAL_MINIFIED=$(($TOTAL_MINIFIED + $MINIFIED_LEN))
 
         # Emit the declaration
         echo "static unsigned char $VAR_NAME[] = {"
@@ -63,6 +65,8 @@ EOF
     done
 
     echo "};"
+
+    echo "Total minified size: $TOTAL_MINIFIED bytes." >&3
 
 }
 

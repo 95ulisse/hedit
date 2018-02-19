@@ -7,6 +7,7 @@
 // which acts as a bridge between the JS and the C worlds.
 
 import EventEmitter from 'hedit/private/eventemitter';
+import format from 'hedit/private/format';
 
 function parseHex(str) {
     const m = str.match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
@@ -101,11 +102,19 @@ function expandTheme(t) {
         log_info:     { fg: 6,   bg: 16,  bold: false, under: false },
         log_warn:     { fg: 3,   bg: 16,  bold: true,  under: false },
         log_error:    { fg: 1,   bg: 16,  bold: true,  under: false },
-        log_fatal:    { fg: 5,   bg: 16,  bold: true,  under: false }
+        log_fatal:    { fg: 5,   bg: 16,  bold: true,  under: false },
+        white:        { fg: 7,   bg: 16,  bold: false, under: false },
+        gray:         { fg: 8,   bg: 16,  bold: false, under: false },
+        blue:         { fg: 4,   bg: 16,  bold: false, under: false },
+        red:          { fg: 1,   bg: 16,  bold: false, under: false },
+        pink:         { fg: 13,  bg: 16,  bold: false, under: false },
+        green:        { fg: 2,   bg: 16,  bold: false, under: false },
+        purple:       { fg: 5,   bg: 16,  bold: false, under: false },
+        orange:       { fg: 208, bg: 16,  bold: false, under: false }
     };
 
     let penDescriptor = {};
-    const textprops = [ 'text', 'linenos', 'error', 'block_cursor', 'soft_cursor', 'commandbar', 'statusbar', 'log_debug', 'log_info', 'log_warn', 'log_error', 'log_fatal' ];
+    const textprops = [ 'text', 'linenos', 'error', 'block_cursor', 'soft_cursor', 'commandbar', 'statusbar', 'log_debug', 'log_info', 'log_warn', 'log_error', 'log_fatal', 'white', 'gray', 'blue', 'red', 'pink', 'green', 'purple', 'orange' ];
     for (let k of textprops) {
         penDescriptor[k] = expandPen(t[k], defaultTheme[k]);
     }
@@ -113,8 +122,7 @@ function expandTheme(t) {
     return penDescriptor;
 }
 
-let hedit = new EventEmitter();
-Object.assign(hedit, {
+class HEdit extends EventEmitter {
 
     /**
      * The name of the mode the editor is currently in.
@@ -122,7 +130,7 @@ Object.assign(hedit, {
      */
     get mode() {
         return __hedit.mode();
-    },
+    }
 
     /**
      * The name of the currently active view.
@@ -130,7 +138,7 @@ Object.assign(hedit, {
      */
     get view() {
         return __hedit.view();
-    },
+    }
 
     /**
      * Sets the current theme.
@@ -179,7 +187,7 @@ Object.assign(hedit, {
      */
     setTheme(t) {
         __hedit.setTheme(expandTheme(t));
-    },
+    }
 
     /**
      * Emits the given keys as if the user actually typed them.
@@ -192,7 +200,7 @@ Object.assign(hedit, {
      */
     emitKeys(keys) {
         __hedit.emitKeys(keys);
-    },
+    }
 
     /**
      * Executes a command.
@@ -204,7 +212,7 @@ Object.assign(hedit, {
      */
     command(cmd) {
         return __hedit.command(cmd);
-    },
+    }
 
     /**
      * Handler of a custom command.
@@ -231,7 +239,7 @@ Object.assign(hedit, {
         if (!__hedit.registerCommand(name, handler)) {
             throw new Error('Command registration failed.');
         }
-    }, 
+    }
 
     /**
      * Handler of a custom option.
@@ -268,7 +276,7 @@ Object.assign(hedit, {
         if (!__hedit.registerOption(name, defaultValue, handler)) {
             throw new Error('Option registration failed.');
         }
-    },
+    }
 
     /**
      * Registers a new key mapping.
@@ -286,7 +294,7 @@ Object.assign(hedit, {
         if (!__hedit.map(mode, from, to, !!force)) {
             throw new Error('Key mapping registration failed.');
         }
-    },
+    }
 
     /**
      * Sets the value of an option.
@@ -301,7 +309,7 @@ Object.assign(hedit, {
         if (!__hedit.set(name, value)) {
             throw new Error(`Failed to set option ${name}.`);
         }
-    },
+    }
 
     /** Retrives the value of an option.
      * @param {string} name - Option name.
@@ -313,7 +321,7 @@ Object.assign(hedit, {
      */
     get(name) {
         return __hedit.get(name);
-    },
+    }
 
     /**
      * Switches the editor to the given mode.
@@ -326,7 +334,27 @@ Object.assign(hedit, {
         __hedit.switchMode(name);
     }
 
-});
+    /**
+     * Registers a new file format.
+     * @param {string} name - Name of the format. Must be unique.
+     * @param {object} [guess] - Hint for automatic selection of format on file open.
+     * @param {string} guess.extension - Use this format for the files matching this extension.
+     * @param {string} guess.magic - Use this format for the files starting with the given magic.
+     * @param {object} desc - Description of the file format.
+     * @throws Throws if the name of the format is not unique or if the format description
+     *         is invalid.
+     */
+    registerFormat(name, guess, desc) {
+        if (typeof desc === 'undefined' && typeof guess === 'object') {
+            desc = guess;
+            guess = null;
+        }
+        format.registerFormat(name, guess, desc);
+    }
+
+};
+
+const hedit = new HEdit();
 
 const events = {
     'load': 'load',

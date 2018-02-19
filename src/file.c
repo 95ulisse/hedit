@@ -153,6 +153,14 @@ struct File {
     struct list_head pending_changes; // Changes not yet attached to a revision
 };
 
+struct FileIterator {
+    size_t max_off; // Maximum offset requested by the user
+    size_t current_off;
+    Piece* current_piece;
+    const unsigned char* current_data;
+    size_t current_len;
+};
+
 
 // Functions to manage blocks
 static Block* block_alloc(File*, size_t);
@@ -1120,4 +1128,63 @@ bool hedit_file_visit(File* file, size_t start, size_t len, bool (*visitor)(File
     }
 
     return true;
+}
+
+FileIterator* hedit_file_iter(File* file, size_t start, size_t len) {
+
+    FileIterator* it = calloc(1, sizeof(FileIterator));
+    if (it == NULL) {
+        log_fatal("Out of memory.");
+        return NULL;
+    }
+    
+    if (start >= file->size || len == 0) {
+        // Return an empty iterator
+        return it;
+    }
+
+    // Find the piece containing the first byte
+    size_t off = 0;
+    list_for_each_member(p, &file->pieces, Piece, list) {
+        if (off + p->size >= start) {
+            size_t piece_start = off <= start ? start - off : 0;
+            it->max_off = MIN(off + piece_start + len, file->size);
+            it->current_off = off;
+            it->current_piece = p;
+            it->current_data = p->data + piece_start;
+            it->current_len = p->size - piece_start;
+            break;
+        }
+        off += p->size;
+    }
+
+    assert(it->current_data != NULL);
+    assert(it->current_len > 0);
+
+    return it;
+
+}
+
+bool hedit_file_iter_next(FileIterator* it, const unsigned char** data, size_t* len) {
+    if (it->current_off >= it->max_off) {
+        return false;
+    }
+
+    // In the iterator, there's a cached version of the next data
+    *data = it->current_data;
+    *len = it->current_len;
+
+    // Advance the iterator and compute the next data to return
+    Piece* p = list_next(it->current_piece, Piece, list);
+    it->current_piece = p;
+    it->current_off += p->size;
+    it->current_data = p->data;
+    it->current_len = p->size - (it->current_off > it->max_off ? it->current_off - it->max_off : 0);
+
+    return true;
+
+}
+
+void hedit_file_iter_free(FileIterator* it) {
+    free(it);
 }

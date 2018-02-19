@@ -161,7 +161,6 @@ void hedit_switch_mode(HEdit* hedit, enum Modes m) {
     }
 
     // Fire the event
-    log_debug("Mode switch: %s -> %s", old == NULL ? NULL : old->name, new->name);
     event_fire(&hedit->ev_mode_switch, hedit, new, old);
 }
 
@@ -301,6 +300,44 @@ static Theme* default_theme() {
         -1
     );
 
+    // Text colors for the file formats
+    theme->white = tickit_pen_clone(theme->text);
+    theme->gray = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 8,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    theme->blue = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 4,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    theme->red = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 1,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    theme->pink = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 13,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    theme->green = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 2,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    theme->purple = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 5,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+    theme->orange = tickit_pen_new_attrs(
+        TICKIT_PEN_FG, 208,
+        TICKIT_PEN_BG, 16,
+        -1
+    );
+
     return theme;
 
 }
@@ -321,6 +358,14 @@ static void free_theme(Theme* t) {
     tickit_pen_unref(t->log_warn);
     tickit_pen_unref(t->log_error);
     tickit_pen_unref(t->log_fatal);
+    tickit_pen_unref(t->white);
+    tickit_pen_unref(t->gray);
+    tickit_pen_unref(t->blue);
+    tickit_pen_unref(t->red);
+    tickit_pen_unref(t->pink);
+    tickit_pen_unref(t->green);
+    tickit_pen_unref(t->purple);
+    tickit_pen_unref(t->orange);
     free(t);
 }
 
@@ -834,6 +879,11 @@ void hedit_core_teardown(HEdit* hedit) {
     buffer_free(hedit->command_buffer);
     if (hedit->file != NULL) {
         hedit_file_close(hedit->file);
+    }
+    
+    // File format
+    if (hedit->format != NULL) {
+        hedit_format_free(hedit->format);
     }
 
     // Free the theme

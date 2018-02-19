@@ -4,23 +4,10 @@
 
 #include "core.h"
 #include "file.h"
+#include "format.h"
 #include "util/common.h"
 #include "util/log.h"
-
-// Some defines useful to shrink the drawing code
-
-#define WITH_PEN(p, block) \
-    do { \
-        tickit_renderbuffer_savepen(s->rb); \
-        tickit_renderbuffer_setpen(s->rb, p); \
-        block; \
-        tickit_renderbuffer_restore(s->rb); \
-    } while (false);
-
-#define WITH_LINENOS_PEN(block) WITH_PEN(s->hedit->theme->linenos, block)
-#define WITH_CURSOR_PEN(block) WITH_PEN(s->hedit->theme->block_cursor, block)
-#define WITH_SCURSOR_PEN(block) WITH_PEN(s->hedit->theme->soft_cursor, block)
-    
+   
 
 /**
  * Private state of the edit view.
@@ -51,127 +38,77 @@ static bool on_exit(HEdit* hedit, View* new) {
     return true;
 }
 
-struct file_visitor_state {
-    HEdit* hedit;
-    ViewState* view_state;
-    TickitRenderBuffer* rb;
-    const char* line_offset_format;
-    size_t line_offset_len;
-    size_t colwidth;
-    bool lineoffset;
-    size_t nextbyte; // Next byte to draw
-};
+static void draw_bytes(HEdit* hedit, TickitRenderBuffer* rb, size_t padding, size_t colwidth,
+                       size_t abs_offset, size_t window_offset, size_t cursor_pos /* absolute */, bool cursor_left,
+                       const unsigned char* data, size_t len, FormatIterator* format_it)
+{
+    // Current format segment
+    FormatSegment* seg = hedit_format_iter_current(format_it);
 
-static inline size_t byte_to_line(struct file_visitor_state* s, size_t offset) {
-    return offset / s->colwidth - s->view_state->scroll_lines;
-}
+    // Array of all the colors for the format
+    TickitPen* pens[] = {
+        hedit->theme->white,
+        hedit->theme->gray,
+        hedit->theme->blue,
+        hedit->theme->red,
+        hedit->theme->pink,
+        hedit->theme->green,
+        hedit->theme->purple,
+        hedit->theme->orange
+    };
 
-static bool file_visitor(File* f, size_t offset, const unsigned char* data, size_t len, void* user) {
-    struct file_visitor_state* s = user;
-    const int ascii_spacing = 2;
+    // Draw for each byte both the hex and the ascii representation
+    for (int i = 0; i < len; i++) {
+        int line = (window_offset + i) / colwidth;
+        int byte_col = padding + ((window_offset + i) % colwidth) * 3;
+        int ascii_col = padding + colwidth * 3 + ((window_offset + i) % colwidth) + 2 /* Some breadth */;
 
-    assert(offset == s->nextbyte);
-    size_t nextbyte = offset;
-
-    // If this invocation of the visitor should draw the last byte, increment the len by adding "virtual" byte
-    // that will be rendered as whitespace just to allow the cursor to go beyond the end of the file
-    bool hasvirtualbyte = false;
-    if (offset + len == hedit_file_size(f)) {
-        len++;
-        hasvirtualbyte = true;
-    }
-
-    /**
-     * We want to draw each line like this:
-     * 
-     * line off.                 data                                  ascii
-     * |-------|-----------------------------------------------|  |--------------|
-     * 00000000: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa  ................
-     */
-
-    // Position the cursor to where the next byte will be drawn
-    tickit_renderbuffer_goto(s->rb, byte_to_line(s, offset), 3 * (offset % s->colwidth) + (s->lineoffset ? s->line_offset_len : 0));
-
-    int i;
-    for (i = 0; i < len; i++) {
-
-        bool isvirtualbyte = offset + i == hedit_file_size(f);
-
-        // If we are at the beginning of a line, print the line offset
-        if (nextbyte % s->colwidth == 0) {
-
-            // Before beginning a new line, draw the ASCII chars for this line
-            if (i > 0) {
-                // Skip the chars printed in a previous segment, but only if we are drawing the first line
-                bool isfirstline = (offset % s->colwidth) + i - 1 < s->colwidth;
-                int skip = isfirstline ? (offset % s->colwidth) : 0;
-                tickit_renderbuffer_goto(s->rb, byte_to_line(s, nextbyte) - 1,
-                    3 * s->colwidth +                                // All the binary data
-                    (s->lineoffset ? s->line_offset_len : 0) +       // Line offset
-                    ascii_spacing +                                  // A bit of spacing
-                    skip);
-                for (int j = i - (isfirstline ? s->colwidth - (offset % s->colwidth) : s->colwidth); j < i; j++) {
-                    if (s->view_state->cursor_pos == offset + j) {
-                        WITH_SCURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
-                    } else {
-                        tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.');
-                    }
-                }
+        // Decide the color of the char depending on the highlighting data reported by the format
+        TickitPen* pen = hedit->theme->text;
+        if (seg != NULL) {
+            size_t off = abs_offset + i;
+            while (seg != NULL && off > seg->to) {
+                seg = hedit_format_iter_next(format_it);
             }
-
-            tickit_renderbuffer_goto(s->rb, byte_to_line(s, nextbyte), 0);
-            if (s->lineoffset) {
-                WITH_LINENOS_PEN(tickit_renderbuffer_textf(s->rb, s->line_offset_format, nextbyte));
+            if (seg != NULL && off >= seg->from && off <= seg->to) {
+                pen = pens[MIN(seg->color, sizeof(pens) / sizeof(pens[0]))];
             }
         }
+        tickit_renderbuffer_setpen(rb, pen);
 
-        char buf[3];
-        if (isvirtualbyte) {
-            buf[0] = buf[1] = ' '; // Spaces for the virtual byte at the end of the file
-            buf[2] = '\0';
+        if (abs_offset + i != cursor_pos) {
+            tickit_renderbuffer_textf_at(rb, line, byte_col, "%02x", data[i]);
+            tickit_renderbuffer_textf_at(rb, line, ascii_col, "%c", isprint(data[i]) ? data[i] : '.');
         } else {
+
+            // The current byte is highlighted by the cursor
+            
+            char buf[3];
             snprintf(buf, 3, "%02x", data[i]);
-        }
-        tickit_renderbuffer_text(s->rb, " ");
-        if (nextbyte == s->view_state->cursor_pos) {
-            if (s->view_state->left) {
-                WITH_CURSOR_PEN(tickit_renderbuffer_textn(s->rb, buf, 1));
-                tickit_renderbuffer_textn(s->rb, buf + 1, 1);
+            if (cursor_left) {
+                tickit_renderbuffer_textf_at(rb, line, byte_col + 1, "%c", buf[1]);
+                tickit_renderbuffer_setpen(rb, hedit->theme->block_cursor);
+                tickit_renderbuffer_textf_at(rb, line, byte_col, "%c", buf[0]);
             } else {
-                tickit_renderbuffer_textn(s->rb, buf, 1);
-                WITH_CURSOR_PEN(tickit_renderbuffer_textn(s->rb, buf + 1, 1));
+                tickit_renderbuffer_textf_at(rb, line, byte_col, "%c", buf[0]);
+                tickit_renderbuffer_setpen(rb, hedit->theme->block_cursor);
+                tickit_renderbuffer_textf_at(rb, line, byte_col + 1, "%c", buf[1]);
             }
-        } else {
-            tickit_renderbuffer_text(s->rb, buf);
-        }
 
-        nextbyte++;
-    }
-
-    // Flush any non-printed ascii chars because of an interrupred line
-    bool isfirstline = (offset % s->colwidth) + i - 1 < s->colwidth;
-    int skip = isfirstline ? (offset % s->colwidth) : 0;
-    int lastlinechars = MIN(((offset % s->colwidth) + len) % s->colwidth, len);
-    tickit_renderbuffer_goto(s->rb, byte_to_line(s, nextbyte) - (lastlinechars == 0 ? 1 : 0),
-        3 * s->colwidth +                                // All the binary data
-        (s->lineoffset ? s->line_offset_len : 0) +       // Line offset
-        ascii_spacing +                                  // A bit of spacing
-        skip);
-    for (int j = len - (lastlinechars == 0 ? MIN(len, s->colwidth) : lastlinechars); j < len; j++) {
-        if (hasvirtualbyte && j == len - 1) {
-            // If this invocation of the visitor has drawn the last byte, it means that we also inserted the "virtual" byte,
-            // but we don't want to draw any ASCII representation for that byte
-            break;
-        }
-        if (s->view_state->cursor_pos == offset + j) {
-            WITH_SCURSOR_PEN(tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.'));
-        } else {
-            tickit_renderbuffer_textf(s->rb, "%c", isprint(data[j]) ? data[j] : '.');
+            tickit_renderbuffer_setpen(rb, hedit->theme->soft_cursor);
+            tickit_renderbuffer_textf_at(rb, line, ascii_col, "%c", isprint(data[i]) ? data[i] : '.');
         }
     }
 
-    s->nextbyte = nextbyte;
-    return true;
+    // Since the cursor can be past the end, if we have just drawn the last portion of the file,
+    // and the cursor is past the end, draw it explicitly
+    if (hedit_file_size(hedit->file) == abs_offset + len && cursor_pos == abs_offset + len) {
+        int line = (window_offset + len) / colwidth;
+        int cursor_col = padding + ((window_offset + len) % colwidth) * 3;
+        tickit_renderbuffer_setpen(rb, hedit->theme->block_cursor);
+        tickit_renderbuffer_text_at(rb, line, cursor_col, " ");
+    }
+
 }
 
 static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
@@ -183,30 +120,47 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
     bool lineoffset = ((Option*) map_get(hedit->options, "lineoffset"))->value.b;
 
     // Precompute the format for the line offset
-    char line_offset_format[10];
-    int line_offset_len = MAX(8, (int) floor(log(hedit_file_size(hedit->file)) / log(16)));
-    snprintf(line_offset_format, 10, "%%0%dx:", (unsigned char) line_offset_len);
+    char lineoffset_format[10];
+    int lineoffset_len = MAX(8, (int) floor(log(hedit_file_size(hedit->file)) / log(16)));
+    snprintf(lineoffset_format, 10, "%%0%dx:", (unsigned char) lineoffset_len);
 
     // Set the normal pen for the text
     tickit_renderbuffer_setpen(e->rb, hedit->theme->text);
     tickit_renderbuffer_clear(e->rb);
 
-    int lines = tickit_window_lines(win);
-    struct file_visitor_state visitor_state = {
-        .hedit = hedit,
-        .view_state = state,
-        .rb = e->rb,
-        .line_offset_format = line_offset_format,
-        .line_offset_len = line_offset_len + 1, // +1 for the ':'
-        .colwidth = colwidth,
-        .lineoffset = lineoffset,
-        .nextbyte = state->scroll_lines * colwidth
-    };
-    hedit_file_visit(hedit->file, visitor_state.nextbyte, colwidth * lines, file_visitor, &visitor_state);
+    /**
+     * We want to draw each line like this:
+     * 
+     * line off.                 data                                  ascii
+     * |-------|-----------------------------------------------|  |--------------|
+     * 00000000: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa  ................
+     */
 
-    // If the file is empty, the visitor does not get called
-    if (hedit_file_size(hedit->file) == 0) {
-        file_visitor(hedit->file, 0, NULL, 0, &visitor_state);
+    int lines = tickit_window_lines(win);
+    FileIterator* file_it = hedit_file_iter(hedit->file, state->scroll_lines * colwidth, colwidth * lines);
+    FormatIterator* format_it = hedit_format_iter(hedit->format, state->scroll_lines * colwidth);
+
+    // Iterate over the portion of the file we have to draw
+    size_t off = 0; // Relative to the first byte to draw
+    const unsigned char* data;
+    size_t len;
+    while (hedit_file_iter_next(file_it, &data, &len)) {
+        draw_bytes(hedit, e->rb, lineoffset ? lineoffset_len + 2 : 0, colwidth,
+                   off + state->scroll_lines * colwidth, off, state->cursor_pos, state->left,
+                   data, len, format_it);
+        off += len;
+    }
+    
+    hedit_format_iter_free(format_it);
+    hedit_file_iter_free(file_it);
+
+    // Draw the line offsets
+    if (lineoffset) {
+        int used_lines = hedit_file_size(hedit->file) / colwidth + 1;
+        tickit_renderbuffer_setpen(e->rb, hedit->theme->linenos);
+        for (int i = 0; i < MIN(used_lines, lines); i++) {
+            tickit_renderbuffer_textf_at(e->rb, i, 0, lineoffset_format, (i + state->scroll_lines) * colwidth);
+        }
     }
 
     // Fill the remaining lines with `~`
@@ -297,6 +251,14 @@ static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
     } else if (cursor_line > state->scroll_lines + windowlines - 1) {
         state->scroll_lines = cursor_line - windowlines + 1;
     }
+
+    // Ask the current format for a description to show on the statusbar
+    FormatIterator* format_it = hedit_format_iter(hedit->format, state->cursor_pos);
+    FormatSegment* seg = hedit_format_iter_next(format_it);
+    if (seg != NULL && state->cursor_pos >= seg->from && state->cursor_pos <= seg->to) {
+        hedit_statusbar_show_message(hedit->statusbar, false, seg->name);
+    }
+    hedit_format_iter_free(format_it);
 
     hedit_redraw_view(hedit);
 }
