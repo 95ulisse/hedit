@@ -75,12 +75,21 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
     // Open file info on the right
     if (statusbar->hedit->file != NULL) {
         File* f = statusbar->hedit->file;
-        size_t len = strlen(hedit_file_name(f)) + (hedit_file_is_ro(f) ? 5 : 0);
-        tickit_renderbuffer_goto(e->rb, 0, tickit_window_cols(win) - len);
-        tickit_renderbuffer_text(e->rb, hedit_file_name(f));
-        if (hedit_file_is_ro(f)) {
-            tickit_renderbuffer_text(e->rb, " [ro]");
-        }
+        char* format_name = ((Option*) map_get(statusbar->hedit->options, "format"))->value.str;
+        bool format_is_none = strcmp("none", format_name) == 0;
+
+        int buf_size = tickit_window_cols(win) + 1;
+        char buf[buf_size];
+        int printed =
+            snprintf(buf, buf_size, "%s %s%s%s%s",
+                hedit_file_name(f),
+                hedit_file_is_ro(f) ? "[ro] " : "",
+                format_is_none ? "" : "[",
+                format_is_none ? "" : format_name,
+                format_is_none ? "" : "] "
+            );
+        buf[buf_size - 1] = '\0';
+        tickit_renderbuffer_text_at(e->rb, 0, tickit_window_cols(win) - MIN(printed, buf_size - 1), buf);
     }
 
     // Current mode on the left
