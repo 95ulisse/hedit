@@ -1146,13 +1146,13 @@ FileIterator* hedit_file_iter(File* file, size_t start, size_t len) {
     // Find the piece containing the first byte
     size_t off = 0;
     list_for_each_member(p, &file->pieces, Piece, list) {
-        if (off + p->size >= start) {
+        if (off + p->size > start) {
             size_t piece_start = off <= start ? start - off : 0;
             it->max_off = MIN(off + piece_start + len, file->size);
             it->current_off = off;
             it->current_piece = p;
             it->current_data = p->data + piece_start;
-            it->current_len = p->size - piece_start;
+            it->current_len = MIN(p->size - piece_start, len);
             break;
         }
         off += p->size;

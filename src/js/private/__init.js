@@ -10,7 +10,8 @@ __hedit.registerFormatGuessFunction(format.guessFormat);
 
 format.registerBuiltinFormat({
     'none':    null,
-    'mifare':  { extension: 'mfd' }
+    'mifare':  { extension: 'mfd' },
+    'string':  null
 });
 
 hedit.registerOption('format', '', name => {

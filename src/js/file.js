@@ -89,6 +89,20 @@ class File extends EventEmitter {
         return this.isOpen && __hedit.file_delete(0 + pos, 0 + len);
     }
 
+    /**
+     * Reads a portion of the currently open file.
+     * @param {number} pos - Index of the first byte to read.
+     * @param {number} len - How many bytes to read.
+     * @return {ArrayBuffer} ArrayBuffer with the contents of the file.
+     */
+    read(pos, len) {
+        if (!this.isOpen) {
+            return null;
+        } else {
+            return __hedit.file_read(0 + pos, 0 + len);
+        }
+    }
+
 };
 
 const file = new File();

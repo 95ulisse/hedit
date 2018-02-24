@@ -1,16 +1,6 @@
+import file from 'hedit/file';
+import Format from 'hedit/format';
 import log from 'hedit/log';
-
-/** Color names to integers map. */
-const colors = {
-    white: 0,
-    gray: 1,
-    blue: 2,
-    red: 3,
-    pink: 4,
-    green: 5,
-    purple: 6,
-    orange: 7
-};
 
 /** A reverse lookup to provide fast automatic guesses of file formats. */
 const guessLookup = {
@@ -35,34 +25,13 @@ function storeGuess(name, guess) {
  */
 const allFormats = {};
 
-function linearize(tree) {
-    const sep = " >> ";
-    const list = [];
-
-    let pos = 0;
-    function rec(prefix, children) {
-        for (let c of children) {
-            if (c.children) {
-                // Inner node
-                rec(prefix + (c.description ? c.description + sep : ''), c.children);
-            } else {
-                // Leaf
-                if (!c.length) {
-                    throw new Error('Missing len on format segment.');
-                }
-                list.push({
-                    name: prefix + (c.description || ''),
-                    from: pos,
-                    to: pos + c.length - 1,
-                    color: colors[c.color] || 0
-                });
-                pos += c.length;
-            }
-        }
+/** Proxy class that records and aggregates the access to the underlying file data. */
+class FileProxy {
+    read(offset, len) {
+        const val = file.read(offset, len);
+        log.info(`Read caught: [${offset}, ${offset + len - 1}] => ${new Uint8Array(val)}`);
+        return val;
     }
-
-    rec('', Array.isArray(tree) ? tree : [tree]);
-    return list;
 }
 
 export default {
@@ -80,7 +49,7 @@ export default {
             throw new Error('Duplicate format name: ' + name);
         }
 
-        allFormats[name] = typeof desc === 'function' ? desc : () => desc;
+        allFormats[name] = () => desc;
         storeGuess(name, guess);
     },
 
@@ -97,7 +66,18 @@ export default {
             log.error(`Unknown format ${name}.`);
             return;
         }
-        __hedit.file_setFormat(linearize(format()));
+
+        let f = format();
+        if (typeof f === 'function') {
+            f = f(new FileProxy());
+        }
+
+        if (!(f instanceof Format)) {
+            log.error('Formats must be an instance of the Format class, or functions returning a Format.');
+            return;
+        }
+
+        __hedit.file_setFormat(f);
     }
 
 };

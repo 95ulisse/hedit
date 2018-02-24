@@ -725,14 +725,55 @@ static void FileSetFormat(const FunctionCallbackInfo<v8::Value>& args) {
         return;
     }
     
-    // Expect an array here
-    if (!args[0]->IsArray()) {
-        isolate->ThrowException(v8_str("Expected array."));
+    if (!args[0]->IsObject()) {
+        isolate->ThrowException(v8_str("Expected object."));
         return;
     }
 
-    JsFormat* format = new JsFormat(isolate, ctx, Local<Array>::Cast(args[0]));
+    Local<Object> obj = Local<Object>::Cast(args[0]);
+    if (!obj->Has(ctx, Symbol::GetIterator(isolate)).FromJust()) {
+        isolate->ThrowException(v8_str("Expected iterable object."));
+        return;
+    }
+
+    JsFormat* format = new JsFormat(isolate, ctx, obj);
     hedit_set_format(hedit, format);
+}
+
+// __hedit.file_read(offset, len);
+static void FileRead(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    assert(args.Length() == 2);
+    assert(hedit->file != NULL);
+
+    size_t offset = args[0]->IntegerValue(ctx).FromJust();
+    size_t len = args[1]->IntegerValue(ctx).FromJust();
+
+    // Clamp the length so that it does not exceed the actual length of the file
+    if (offset + len > hedit_file_size(hedit->file)) {
+        len -= offset + len - hedit_file_size(hedit->file);
+    }
+
+    // Allocate an ArrayBuffer to hold the results
+    Local<ArrayBuffer> buf = ArrayBuffer::New(isolate, len);
+    char* dest = (char*) buf->GetContents().Data();
+
+    // Read the file and copy to the arraybuffer
+    FileIterator* it = hedit_file_iter(hedit->file, offset, len);
+    const unsigned char* chunk;
+    size_t chunk_len;
+    size_t off = 0;
+    while (hedit_file_iter_next(it, &chunk, &chunk_len)) {
+        memcpy(dest + off, chunk, chunk_len);
+        off += chunk_len;
+    }
+    hedit_file_iter_free(it);
+
+    args.GetReturnValue().Set(buf);
 }
 
 // __hedit.statusbar_showMessage(msg, sticky);
@@ -960,6 +1001,7 @@ bool hedit_js_init(HEdit* hedit) {
         SET("file_insert", FileInsert);
         SET("file_delete", FileDelete);
         SET("file_setFormat", FileSetFormat);
+        SET("file_read", FileRead);
         SET("statusbar_showMessage", StatusbarShowMessage);
         SET("statusbar_hideMessage", StatusbarHideMessage);
         Local<ObjectTemplate> builtin_global = ObjectTemplate::New(isolate);
@@ -1055,6 +1097,7 @@ void hedit_format_guess(HEdit* hedit) {
         Local<v8::Value> ex = tt.Exception();
         String::Utf8Value str(isolate, ex);
         log_error("Exception during JS format guessing: %s", c_str(str));
+        hedit_option_set(hedit, "format", "none");
         return;
     }
 
@@ -1070,16 +1113,36 @@ void hedit_format_free(Format* format) {
 }
 
 FormatIterator* hedit_format_iter(Format* format, size_t from) {
+    
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
     HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
     return format->Iterator(from);
+
 }
 
 FormatSegment* hedit_format_iter_current(FormatIterator* it) {
+
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
     return it->Current();
+
 }
 
 FormatSegment* hedit_format_iter_next(FormatIterator* it) {
+
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
     return it->Next();
+
 }
 
 void hedit_format_iter_free(FormatIterator* it) {
@@ -1090,41 +1153,116 @@ JsFormatIterator* JsFormat::Iterator(size_t from) {
     HandleScope handle_scope(_isolate);
 
     Local<Context> ctx = _ctx.Get(_isolate);
-    Local<Array> arr = _arr.Get(_isolate);
+    Local<Object> obj = _obj.Get(_isolate);
 
-    // Return the first segment containing the indicated point.
-    // This assumes that the intervals do not overlap.
-    unsigned int i;
-    for (i = 0; i < arr->Length(); i++) {
-        auto seg = Local<Object>::Cast(arr->Get(ctx, i).ToLocalChecked());
-        size_t to = (size_t) seg->Get(ctx, v8_str("to")).ToLocalChecked()->IntegerValue(ctx).FromJust();
-        if (to >= from) {
-            break;
-        }
+    // An iterable object has the @@iterator method that constructs an iterator
+    Local<Symbol> sym = Symbol::GetIterator(_isolate);
+    Local<v8::Value> iteratorConstructor;
+    if (!obj->Get(ctx, sym).ToLocal(&iteratorConstructor)) {
+        log_fatal("Invalid iterator.");
+        return NULL;
+    }
+    if (!iteratorConstructor->IsFunction()) {
+        log_fatal("Invalid iterator.");
+        return NULL;
     }
 
-    return new JsFormatIterator(_isolate, this, i);
+    TryCatch tt;
+    Local<v8::Value> iterator;
+    if (!Local<Function>::Cast(iteratorConstructor)->Call(ctx, obj, 0, {}).ToLocal(&iterator)) {
+        Local<v8::Value> ex = tt.Exception();
+        String::Utf8Value str(isolate, ex);
+        log_fatal("Invalid iterator: %s", c_str(str));
+        return NULL;
+    }
+    
+    if (!iterator->IsObject()) {
+        log_fatal("Invalid iterator.");
+        return NULL;
+    }
+
+    return new JsFormatIterator(_isolate, Local<Object>::Cast(iterator), from);
+}
+
+JsFormatIterator::JsFormatIterator(Isolate* isolate, Local<Object> jsIterator, size_t from)
+        : _isolate(isolate),
+          _jsIterator(isolate, jsIterator),
+          _from(from)
+{
+    _current.name = (const char*) &_currentName;
+
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+
+    // Cache the `next` function
+    Local<v8::Value> nextFunction = jsIterator->Get(ctx, v8_str("next")).ToLocalChecked();
+    _nextFunction.Reset(_isolate, Local<Function>::Cast(nextFunction));
+}
+
+MaybeLocal<Object> JsFormatIterator::AdvanceIterator() {
+    EscapableHandleScope handle_scope(_isolate);
+    Local<Context> ctx = _isolate->GetCurrentContext();
+
+    Local<Object> iterator = _jsIterator.Get(_isolate);
+    Local<Function> nextFunction = _nextFunction.Get(_isolate);
+
+    // Call the `next()` method of the JS iterator
+    TryCatch tt;
+    Local<v8::Value> res;
+    if (!nextFunction->Call(ctx, iterator, 0, {}).ToLocal(&res)) {
+        Local<v8::Value> ex = tt.Exception();
+        String::Utf8Value str(isolate, ex);
+        log_fatal("Invalid iterator: %s", c_str(str));
+        return MaybeLocal<Object>();
+    }
+    if (!res->IsObject()) {
+        log_fatal("Invalid iterator.");
+        return MaybeLocal<Object>();
+    }
+
+    // The returned object has two properties: `value` and `done`
+
+    Local<Object> resobj = Local<Object>::Cast(res);
+    bool done = resobj->Get(ctx, v8_str("done")).ToLocalChecked()->BooleanValue(ctx).FromJust();
+    if (done) {
+        _done = true;
+        return MaybeLocal<Object>();
+    }
+
+    Local<v8::Value> val = resobj->Get(ctx, v8_str("value")).ToLocalChecked();
+    return MaybeLocal<Object>(handle_scope.Escape(Local<Object>::Cast(val)));
 }
 
 FormatSegment* JsFormatIterator::Next() {
 
     // Return NULL if we reached the end
-    if (_index >= _format->GetSegmentsCount()) {
+    if (_done) {
         return NULL;
     }
 
     HandleScope handle_scope(_isolate);
+    Local<Context> ctx = _isolate->GetCurrentContext();
 
-    Local<v8::Object> seg = _format->GetSegment(_index);
-    _index++;
+again:
+    // Advance the JS iterator
+    Local<Object> seg;
+    if (!AdvanceIterator().ToLocal(&seg)) {
+        // Finished!
+        return NULL;
+    }
 
-    // Start unpacking the properties of the JS object in the native structure
-    Local<Context> ctx = user_context.Get(isolate);
+    // We have a starting offset to start iterating from,
+    // so discard all the segments before that offset
+    _current.to = (size_t) seg->Get(ctx, v8_str("to")).ToLocalChecked()->IntegerValue(ctx).FromJust();
+    if (_current.to < _from) {
+        goto again;
+    }
+
+    // Start unpacking the other properties of the JS object in the native structure
     String::Utf8Value name(isolate, seg->Get(ctx, v8_str("name")).ToLocalChecked());
     strncpy((char*) &_currentName, *name, MAX_SEGMENT_NAME_LEN);
     _currentName[MAX_SEGMENT_NAME_LEN - 1] = '\0';
     _current.from = (size_t) seg->Get(ctx, v8_str("from")).ToLocalChecked()->IntegerValue(ctx).FromJust();
-    _current.to = (size_t) seg->Get(ctx, v8_str("to")).ToLocalChecked()->IntegerValue(ctx).FromJust();
     _current.color = (int) seg->Get(ctx, v8_str("color")).ToLocalChecked()->IntegerValue(ctx).FromJust();
 
     _initialized = true;
@@ -1135,7 +1273,7 @@ FormatSegment* JsFormatIterator::Next() {
 FormatSegment* JsFormatIterator::Current() {
 
     // Return NULL if we reached the end
-    if (_index >= _format->GetSegmentsCount()) {
+    if (_done) {
         return NULL;
     }
 
