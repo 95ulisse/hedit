@@ -5,7 +5,8 @@ import log from 'hedit/log';
 /** A reverse lookup to provide fast automatic guesses of file formats. */
 const guessLookup = {
     extension: {},
-    magic: {}
+    magic: [],
+    maxMagicLength: 0
 };
 
 function storeGuess(name, guess) {
@@ -14,7 +15,9 @@ function storeGuess(name, guess) {
             guessLookup.extension[guess.extension] = name;
         }
         if (guess.magic) {
-            guessLookup.magic[guess.extension] = name;
+            const m = guess.magic.buffer ? new Uint8Array(guess.magic.buffer) : guess.magic;
+            guessLookup.magic.push([ m, name ]);
+            guessLookup.maxMagicLength = Math.max(guessLookup.maxMagicLength, m.byteLength);
         }
     }
 }
@@ -39,7 +42,7 @@ export default {
     registerBuiltinFormat(formats) {
         for (let k in formats) {
             allFormats[k] = () => __hedit.require('hedit/format/' + k).default;
-            storeGuess(formats[k]);
+            storeGuess(k, formats[k]);
         }
     },
 
@@ -56,7 +59,42 @@ export default {
     // This function will be called by the native code when we need to make
     // a first guess on a freshly opened file.
     guessFormat() {
+
+        // First try with the magic
+        if (guessLookup.maxMagicLength > 0) {
+            const magic = new Uint8Array(file.read(0, guessLookup.maxMagicLength));
+            for (let [ k, name ] of guessLookup.magic) {
+                if (k.byteLength <= magic.byteLength) {
+                    let eq = true;
+                    for (let i = 0; i < k.byteLength; i++) {
+                        if (k[i] != magic[i]) {
+                            eq = false;
+                            break;
+                        }
+                    }
+                    if (eq) {
+                        log.debug('Guessing format ' + name + ' for matching magic.');
+                        return name;
+                    }
+                }
+            }
+        }
+
+        // Then with the extension
+        const name = file.name;
+        if (name) {
+            const ext = name.match(/\.\w+$/);
+            if (ext && ext[0]) {
+                const formatName = guessLookup.extension[ext[0].substring(1)];
+                if (formatName) {
+                    log.debug('Guessing format ' + formatName + ' for matching extension.');
+                    return formatName;
+                }
+            }
+        }
+
         return 'none';
+
     },
 
     // This function is called evey time the `:set` option `format` changes.

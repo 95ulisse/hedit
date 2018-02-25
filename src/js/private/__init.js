@@ -11,7 +11,7 @@ __hedit.registerFormatGuessFunction(format.guessFormat);
 format.registerBuiltinFormat({
     'none':    null,
     'mifare':  { extension: 'mfd' },
-    'string':  null
+    'string':  { magic: new Uint8Array([ 0x0a ]) }
 });
 
 hedit.registerOption('format', '', name => {
