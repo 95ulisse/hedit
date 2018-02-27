@@ -6,13 +6,11 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "build-config.h"
 #include "options.h"
 #include "core.h"
 #include "util/common.h"
 #include "util/log.h"
-
-// Some constants
-#define HEDIT_VERSION "0.1.0"
 
 static struct option long_options[] = {
     
@@ -45,7 +43,10 @@ static void print_usage(const char* selfpath) {
 }
 
 static void print_version() {
-    printf("HEdit v" HEDIT_VERSION "\n");
+    printf(
+        "HEdit v" HEDIT_VERSION "\n"
+        "+ v8 v" V8_VERSION "\n"
+    );
 }
 
 static bool is_writable_fd(int fd) {

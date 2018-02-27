@@ -1,0 +1,122 @@
+cmake_minimum_required (VERSION 2.6)
+project (HEdit)
+
+# Paths
+get_filename_component (SRC "./src" REALPATH BASE_DIR "${PROJECT_SOURCE_DIR}")
+get_filename_component (GEN "./gen" REALPATH BASE_DIR "${PROJECT_BINARY_DIR}")
+get_filename_component (DEPS "./deps" REALPATH BASE_DIR "${PROJECT_SOURCE_DIR}")
+get_filename_component (SCRIPTS "./scripts" REALPATH BASE_DIR "${PROJECT_SOURCE_DIR}")
+get_filename_component (DOCS "./docs" REALPATH BASE_DIR "${PROJECT_SOURCE_DIR}")
+
+# Default build type
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Debug" CACHE STRING
+      "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel."
+      FORCE)
+endif()
+
+# Compiler options
+set (CMAKE_C_FLAGS "-std=c99 -Wall -Werror -pedantic -D_POSIX_C_SOURCE=200809L")
+set (CMAKE_C_FLAGS_DEBUG "-g -DDEBUG")
+set (CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror -pedantic")
+set (CMAKE_CXX_FLAGS_DEBUG "-g -DDEBUG")
+set (CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+
+# Version number
+set (HEDIT_VERSION "0.1.0")
+
+
+
+# --------------------------------------------------------------------
+# External libs
+# --------------------------------------------------------------------
+
+add_custom_target (
+   libtickit
+   COMMAND cd "${DEPS}/libtickit" && (patch -N -p1 < ../libtickit.patch || true) && make
+)
+include_directories ("${DEPS}/libtickit/include")
+
+# V8 version and arch
+execute_process (COMMAND /bin/sh "-c" "gcc -dumpmachine | cut -d - -f 1"
+                 OUTPUT_VARIABLE ARCH
+                 OUTPUT_STRIP_TRAILING_WHITESPACE)
+set (V8_VERSION 6.4)
+if ("${ARCH}" STREQUAL "x86_64")
+    set (V8_ARCH "x64")
+elseif ("${ARCH}" STREQUAL "i386")
+    set (V8_ARCH "ia32")
+else ()
+    set (V8_ARCH "${ARCH}")
+endif ()
+
+add_custom_target (
+    v8
+    COMMAND "${SCRIPTS}/build-v8.sh" "${DEPS}" "${V8_VERSION}" "${V8_ARCH}"
+)
+include_directories ("${DEPS}/v8/include")
+
+
+
+# --------------------------------------------------------------------
+# HEdit
+# --------------------------------------------------------------------
+
+# Generated header for JS modules
+file (GLOB_RECURSE JS_MODULES "${SRC}/js/*.js")
+add_custom_command (
+    OUTPUT "${GEN}/js-builtin-modules.cc"
+    COMMAND "${SCRIPTS}/gen-js.sh" "${SRC}/js" "${GEN}/js-builtin-modules.cc"
+    DEPENDS ${JS_MODULES}
+)
+
+# Header file to pass the build config
+configure_file (
+    "${SRC}/build-config.h.in"
+    "gen/build-config.h"
+)
+
+# Include directories
+include_directories ("${SRC}")
+include_directories ("${GEN}")
+
+# Source files
+file (GLOB_RECURSE SOURCES "${SRC}/*.c" "${SRC}/*.cc")
+
+# Final executable
+add_executable (hedit ${SOURCES} "${GEN}/js-builtin-modules.cc")
+target_link_libraries (hedit "m")
+target_link_libraries (hedit "pthread")
+target_link_libraries (hedit "termkey")
+target_link_libraries (hedit "unibilium")
+target_link_libraries (hedit "${DEPS}/libtickit/.libs/libtickit.a")
+target_link_libraries (hedit -Wl,--start-group "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libplatform.a"
+                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_base.a"
+                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libbase.a"
+                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_nosnapshot.a"
+                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libsampler.a"
+                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_initializers.a"
+                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_init.a"
+                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicui18n.a"
+                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicuuc.a"
+                             -Wl,--end-group)
+add_dependencies(hedit libtickit v8)
+
+# JS Docs
+add_custom_target (
+    docs
+    COMMAND cd "${DOCS}" && npm i && ./node_modules/.bin/jsdoc -c jsdoc.json
+)
+add_custom_target (
+    docs-clean
+    COMMAND rm -rf "${DOCS}/out" "${DOCS}/node_modules"
+)
+add_custom_target (
+    docs-publish
+	COMMAND git checkout gh-pages
+	COMMAND cp -R "${DOCS}/out/*" .
+	COMMAND git add .
+	COMMAND (git commit -m "Documentation update." && git push origin gh-pages) || true
+	COMMAND git checkout master
+)

@@ -22,16 +22,17 @@ HEdit has two main dependencies:
   $ python --version # This should be Python 2.*
   ```
 
-Once you have satisfied all the dependencies, you can compile by issuing a simple `make`.
+Once you have satisfied all the dependencies, you can compile with `cmake`.
 
 ```
 $ git clone --recursive https://github.com/95ulisse/hedit.git
 $ cd hedit
+$ mkdir build && cd build
+$ cmake -DCMAKE_BUILD_TYPE=Release ..
 $ make
-# make install
 ```
 
-The build output is in the `out` folder.
+The build output is in the `build` folder.
 
 ## Documentation
 
@@ -40,7 +41,8 @@ There's some documentation available for the JavaScript APIs at https://95ulisse
 To build the docs locally, you need [Node](https://nodejs.org) installed, then issue:
 
 ```
-make docs
+$ cd build
+$ make docs
 ```
 
 The docs will be in `docs/out`.

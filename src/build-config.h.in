@@ -1,0 +1,10 @@
+#ifndef __BUILD_CONFIG_H__
+#define __BUILD_CONFIG_H__
+
+// Version number
+#define HEDIT_VERSION "@HEDIT_VERSION@"
+
+// V8 info
+#define V8_VERSION "@V8_VERSION@"
+
+#endif

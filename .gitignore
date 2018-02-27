@@ -1,4 +1,4 @@
-out/
+build/
 docs/out/
 docs/node_modules/
 deps/.gclient*
