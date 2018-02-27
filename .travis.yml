@@ -2,10 +2,20 @@ language: cpp
 
 addons:
   apt:
+    sources:
+    # Libtermkey package is only in Xenial
+    - sourceline: 'deb http://cz.archive.ubuntu.com/ubuntu xenial main universe'
     packages:
     - python2.7
+    - bzr
+    - libtermkey1
+    - libtermkey-dev
+    - libunibilium0
+    - libunibilium-dev
 
 script:
+  - if [ ! -e depot_tools/gclient ]; then git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git; fi
+  - export PATH="$PATH:"`pwd`/depot_tools
   - mkdir build && cd build
   - cmake -DCMAKE_BUILD_TYPE=Release ..
   - make

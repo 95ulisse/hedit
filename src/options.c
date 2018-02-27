@@ -45,7 +45,9 @@ static void print_usage(const char* selfpath) {
 static void print_version() {
     printf("HEdit v" HEDIT_VERSION "\n");
 #ifdef WITH_V8
-    printf("+ v8 v" V8_VERSION "\n");
+    printf("+v8 v" V8_VERSION "\n");
+#else
+    printf("-v8\n");
 #endif
 }
 

@@ -38,7 +38,7 @@ option (WITH_V8 "Enable JavaScript integration with V8." ON)
 # Libtickit
 add_custom_target (
    libtickit
-   COMMAND cd "${DEPS}/libtickit" && (patch -N -p1 < ../libtickit.patch || true) && make
+   COMMAND "${SCRIPTS}/build-libtickit.sh" "${DEPS}"
 )
 include_directories ("${DEPS}/libtickit/include")
 

@@ -1,4 +1,4 @@
-# HEdit
+# HEdit [![Build Status](https://travis-ci.org/95ulisse/hedit.svg?branch=master)](https://travis-ci.org/95ulisse/hedit)
 
 HEdit is a simple terminal-based hex editor inspired by VIM and scriptable with JS.
 
@@ -6,8 +6,7 @@ HEdit is a simple terminal-based hex editor inspired by VIM and scriptable with 
 
 HEdit has two main dependencies:
 
--  `libtickit`, which is currently available only on Bazaar, and you might need to
-   install a Git helper to clone from Bazaar, like `git-remote-bzr`.
+-  `libtickit`, which is currently available only on Bazaar, so you may need to install it.
 
 - `V8`, which has its own build system. To build `V8` you need to install the `depot_tools`
   from http://dev.chromium.org/developers/how-tos/install-depot-tools, and you must also be sure
@@ -25,8 +24,6 @@ HEdit has two main dependencies:
 Once you have satisfied all the dependencies, you can compile with `cmake`.
 
 ```
-$ git clone --recursive https://github.com/95ulisse/hedit.git
-$ cd hedit
 $ mkdir build && cd build
 $ cmake -DCMAKE_BUILD_TYPE=Release ..
 $ make

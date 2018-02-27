@@ -1,3 +1,0 @@
-[submodule "lib/libtickit"]
-	path = deps/libtickit
-	url = bzr::http://bazaar.leonerd.org.uk/c/libtickit/
