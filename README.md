@@ -30,6 +30,7 @@ $ cd hedit
 $ mkdir build && cd build
 $ cmake -DCMAKE_BUILD_TYPE=Release ..
 $ make
+# make install
 ```
 
 The build output is in the `build` folder.

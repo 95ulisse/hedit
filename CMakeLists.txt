@@ -116,6 +116,10 @@ else ()
     set_source_files_properties ("${SRC}/js.cc" PROPERTIES HEADER_FILE_ONLY TRUE)
 endif ()
 
+# Install
+install (TARGETS hedit
+         RUNTIME DESTINATION bin)
+
 # JS Docs
 add_custom_target (
     docs
