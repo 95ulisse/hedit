@@ -2,8 +2,7 @@
 #define __FORMAT_H__
 
 #include <stdlib.h>
-#include "core.h"
-#include "file.h"
+#include "build-config.h"
 
 
 #define MAX_SEGMENT_NAME_LEN 256
@@ -17,7 +16,7 @@ typedef struct {
 } FormatSegment;
 
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && defined(WITH_V8)
 
 #include <v8.h>
 
@@ -83,18 +82,22 @@ private:
  * Actual format descriptions are implemented in JavaScript.
  * See all the files in src/js/format.
  */
-#ifdef __cplusplus
+#if defined(__cplusplus) && defined(WITH_V8)
 typedef JsFormat Format;
 #else
 typedef void Format;
 #endif
 
 /** Iterator over all the format segments. */
-#ifdef __cplusplus
+#if defined(__cplusplus) && defined(WITH_V8)
 typedef JsFormatIterator FormatIterator;
 #else
 typedef void FormatIterator;
 #endif
+
+
+#include "core.h"
+#include "file.h"
 
 
 #ifdef __cplusplus

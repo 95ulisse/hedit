@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 3.1)
 project (HEdit)
 
 # Paths
@@ -26,36 +26,45 @@ set (CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 # Version number
 set (HEDIT_VERSION "0.1.0")
 
+# Build options
+option (WITH_V8 "Enable JavaScript integration with V8." ON)
+
 
 
 # --------------------------------------------------------------------
 # External libs
 # --------------------------------------------------------------------
 
+# Libtickit
 add_custom_target (
    libtickit
    COMMAND cd "${DEPS}/libtickit" && (patch -N -p1 < ../libtickit.patch || true) && make
 )
 include_directories ("${DEPS}/libtickit/include")
 
-# V8 version and arch
-execute_process (COMMAND /bin/sh "-c" "gcc -dumpmachine | cut -d - -f 1"
-                 OUTPUT_VARIABLE ARCH
-                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-set (V8_VERSION 6.4)
-if ("${ARCH}" STREQUAL "x86_64")
-    set (V8_ARCH "x64")
-elseif ("${ARCH}" STREQUAL "i386")
-    set (V8_ARCH "ia32")
-else ()
-    set (V8_ARCH "${ARCH}")
-endif ()
+# V8
+if (WITH_V8)
 
-add_custom_target (
-    v8
-    COMMAND "${SCRIPTS}/build-v8.sh" "${DEPS}" "${V8_VERSION}" "${V8_ARCH}"
-)
-include_directories ("${DEPS}/v8/include")
+    # V8 version and arch
+    execute_process (COMMAND /bin/sh "-c" "gcc -dumpmachine | cut -d - -f 1"
+                     OUTPUT_VARIABLE ARCH
+                     OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set (V8_VERSION 6.4)
+    if ("${ARCH}" STREQUAL "x86_64")
+        set (V8_ARCH "x64")
+    elseif ("${ARCH}" STREQUAL "i386")
+        set (V8_ARCH "ia32")
+    else ()
+        set (V8_ARCH "${ARCH}")
+    endif ()
+    
+    add_custom_target (
+        v8
+        COMMAND "${SCRIPTS}/build-v8.sh" "${DEPS}" "${V8_VERSION}" "${V8_ARCH}"
+    )
+    include_directories ("${DEPS}/v8/include")
+
+endif ()
 
 
 
@@ -85,23 +94,27 @@ include_directories ("${GEN}")
 file (GLOB_RECURSE SOURCES "${SRC}/*.c" "${SRC}/*.cc")
 
 # Final executable
-add_executable (hedit ${SOURCES} "${GEN}/js-builtin-modules.cc")
-target_link_libraries (hedit "m")
-target_link_libraries (hedit "pthread")
-target_link_libraries (hedit "termkey")
-target_link_libraries (hedit "unibilium")
+add_executable (hedit ${SOURCES})
+target_link_libraries (hedit "m" "pthread" "termkey" "unibilium")
 target_link_libraries (hedit "${DEPS}/libtickit/.libs/libtickit.a")
-target_link_libraries (hedit -Wl,--start-group "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libplatform.a"
-                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_base.a"
-                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libbase.a"
-                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_nosnapshot.a"
-                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libsampler.a"
-                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_initializers.a"
-                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_init.a"
-                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicui18n.a"
-                                               "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicuuc.a"
-                             -Wl,--end-group)
-add_dependencies(hedit libtickit v8)
+add_dependencies (hedit libtickit)
+if (WITH_V8)
+    target_link_libraries (hedit -Wl,--start-group "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libplatform.a"
+                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_base.a"
+                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libbase.a"
+                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_nosnapshot.a"
+                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libsampler.a"
+                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_initializers.a"
+                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_init.a"
+                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicui18n.a"
+                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicuuc.a"
+                                 -Wl,--end-group)
+    target_sources (hedit PUBLIC "${GEN}/js-builtin-modules.cc")
+    set_source_files_properties ("${SRC}/format-empty.c" PROPERTIES HEADER_FILE_ONLY TRUE)
+    add_dependencies (hedit v8)
+else ()
+    set_source_files_properties ("${SRC}/js.cc" PROPERTIES HEADER_FILE_ONLY TRUE)
+endif ()
 
 # JS Docs
 add_custom_target (

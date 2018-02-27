@@ -557,7 +557,7 @@ static bool option_colwidth(HEdit* hedit, Option* opt, const Value* v, void* use
     }
 }
 
-static bool option_lineoffset(HEdit* hedit, Option* opt, const Value* v, void* user) {
+static bool option_cb_redraw(HEdit* hedit, Option* opt, const Value* v, void* user) {
     hedit_redraw(hedit);
     return true;
 }
@@ -577,7 +577,12 @@ static bool init_builtin_options(HEdit* hedit) {
     }
 
     REG("colwidth",    INT,   { .i = 16   },  option_colwidth);
-    REG("lineoffset",  BOOL,  { .b = true },  option_lineoffset);
+    REG("lineoffset",  BOOL,  { .b = true },  option_cb_redraw);
+
+#ifndef WITH_V8
+    // Provide an always "none" format option if V8 is not available
+    REG("format", STRING, { .str = "none" }, option_cb_redraw);
+#endif
 
 #undef REG
 

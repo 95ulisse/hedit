@@ -34,6 +34,13 @@ $ make
 
 The build output is in the `build` folder.
 
+### Common build options
+
+There are some common options to pass to `cmake` to customize the build:
+
+- **Debug build**: `-DCMAKE_BUILD_TYPE=Debug`
+- **Disable V8**: `-DWITH_V8=OFF`
+
 ## Documentation
 
 There's some documentation available for the JavaScript APIs at https://95ulisse.github.io/hedit.

@@ -43,10 +43,10 @@ static void print_usage(const char* selfpath) {
 }
 
 static void print_version() {
-    printf(
-        "HEdit v" HEDIT_VERSION "\n"
-        "+ v8 v" V8_VERSION "\n"
-    );
+    printf("HEdit v" HEDIT_VERSION "\n");
+#ifdef WITH_V8
+    printf("+ v8 v" V8_VERSION "\n");
+#endif
 }
 
 static bool is_writable_fd(int fd) {

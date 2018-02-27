@@ -5,6 +5,9 @@
 #define HEDIT_VERSION "@HEDIT_VERSION@"
 
 // V8 info
+#cmakedefine WITH_V8
+#ifdef WITH_V8
 #define V8_VERSION "@V8_VERSION@"
+#endif
 
 #endif

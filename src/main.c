@@ -7,6 +7,7 @@
 #include <setjmp.h>
 #include <tickit.h>
 
+#include "build-config.h"
 #include "core.h"
 #include "actions.h"
 #include "commands.h"
@@ -49,9 +50,11 @@ static int do_open_file(Tickit *t, TickitEventFlags flags, void *user) {
 
 static int on_tickit_ready(Tickit *t, TickitEventFlags flags, void *user) {
     HEdit* hedit = user;
+#ifdef WITH_V8
     if (!hedit_js_init(hedit)) {
         log_fatal("Cannot initialize V8.");
     }
+#endif
     event_fire(&hedit->ev_load, hedit);
     return 1;
 }
@@ -124,7 +127,9 @@ int main(int argc, char** argv) {
     // Tear down everything
     int exitcode = hedit->exitcode;
     hedit_core_teardown(hedit);
+#ifdef WITH_V8
     hedit_js_teardown();
+#endif
     tickit_unref(tickit);
     log_teardown();
     return exitcode;
