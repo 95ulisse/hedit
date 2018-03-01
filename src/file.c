@@ -457,6 +457,7 @@ File* hedit_file_open(const char* path) {
             ro = false;
             break;
         case EACCES:
+        case EPERM:
             errno = 0;
             while ((fd = open(path, O_RDONLY)) == -1 && errno == EINTR);
             if (errno != 0) {
