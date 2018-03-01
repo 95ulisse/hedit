@@ -16,7 +16,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Compiler options
-set (CMAKE_C_FLAGS "-std=c99 -Wall -Werror -pedantic -D_POSIX_C_SOURCE=200809L")
+set (CMAKE_C_FLAGS "-std=c99 -Wall -Werror -Wno-error=missing-braces -pedantic -D_POSIX_C_SOURCE=200809L")
 set (CMAKE_C_FLAGS_DEBUG "-g -DDEBUG")
 set (CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
 set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror -pedantic")
@@ -95,8 +95,8 @@ file (GLOB_RECURSE SOURCES "${SRC}/*.c" "${SRC}/*.cc")
 
 # Final executable
 add_executable (hedit ${SOURCES})
-target_link_libraries (hedit "m" "pthread" "termkey" "unibilium")
 target_link_libraries (hedit "${DEPS}/libtickit/.libs/libtickit.a")
+target_link_libraries (hedit "m" "pthread" "termkey" "unibilium")
 add_dependencies (hedit libtickit)
 if (WITH_V8)
     target_link_libraries (hedit -Wl,--start-group "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libplatform.a"

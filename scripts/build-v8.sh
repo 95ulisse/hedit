@@ -38,10 +38,9 @@ pushd v8
 git checkout "remotes/branch-heads/$VERSION"
 gclient sync
 
-if gcc -v 2>&1 | grep -qi "gcc\s*version\s*7\."; then
-    echo "Applying patch for gcc 7..."
-    patch -N -p1 < ../v8-gcc7.patch || true
-fi
+# Patches
+echo "Applying patches..."
+patch -N -p1 < ../v8-dont-build-tests.patch || true
 
 popd
 
