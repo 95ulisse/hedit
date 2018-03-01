@@ -5,6 +5,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <assert.h>
@@ -99,7 +101,7 @@
  *
  */
 
-#define BLOCK_SIZE (1024 * 1024) /* 1MiB */
+#define MEM_BLOCK_SIZE (1024 * 1024) /* 1MiB */
 
 typedef struct {
     unsigned char* data;
@@ -193,7 +195,7 @@ static Block* block_alloc(File* file, size_t size) {
         log_fatal("Out of memory.");
         return NULL;
     }
-    block->size = MAX(size, BLOCK_SIZE);
+    block->size = MAX(size, MEM_BLOCK_SIZE);
     block->len = 0;
     block->type = BLOCK_MALLOC;
     list_init(&block->list);
@@ -471,7 +473,7 @@ File* hedit_file_open(const char* path) {
     }
     file->ro = ro;
 
-    // Stat the file to get the size
+    // Stat the file to get some info about it
     struct stat s;
     if (fstat(fd, &s) < 0) {
         log_error("Cannot stat %s: %s.", path, strerror(errno));
@@ -480,10 +482,29 @@ File* hedit_file_open(const char* path) {
         return NULL;
     }
 
+    // Get file size.
+    // Block devices need a specific ioctl.
+    size_t size = 0;
+    if (S_ISBLK(s.st_mode)) {
+        if (ioctl(fd, BLKGETSIZE64, &size) < 0) {
+            log_error("Cannot get block device size: %s.", strerror(errno));
+            close(fd);
+            hedit_file_close(file);
+            return NULL;
+        }
+    } else if (S_ISREG(s.st_mode)) {
+        size = s.st_size;
+    } else {
+        log_error("Unsupported file type: %s.", path);
+        close(fd);
+        hedit_file_close(file);
+        return NULL;
+    }
+
     // mmap the file to memory and create the initial piece
     Piece* p = NULL;
-    if (s.st_size > 0) {
-        Block* b = block_alloc_mmap(file, fd, s.st_size);
+    if (size > 0) {
+        Block* b = block_alloc_mmap(file, fd, size);
         if (b == NULL) {
             close(fd);
             hedit_file_close(file);
