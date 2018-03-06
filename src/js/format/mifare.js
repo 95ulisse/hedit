@@ -26,7 +26,7 @@ const trailerBlock = n =>
         .group('Block #' + n)
             .array('Key A', 6, 'green')
             .array('Access bits', 3, 'purple')
-            .array('General purpose', 1)
+            .array(null, 1)
             .array('Key B', 6, 'orange')
         .endgroup();
 
