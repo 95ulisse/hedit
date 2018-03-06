@@ -1,4 +1,4 @@
-/** Color names to integers map. */
+// Color names to integers map.
 const COLORS = {
     white: 0,
     gray: 1,
@@ -10,15 +10,26 @@ const COLORS = {
     orange: 7
 };
 
+// Separator between segment names
+const SEP = " > ";
+function join(groups, name) {
+    if (groups.length) {
+        return groups.join(SEP) + SEP + name;
+    } else {
+        return name;
+    }
+}
+
 export default class Format {
     constructor(proxy) {
         this._proxy = proxy;
         this._segments = [];
+        this._groups = [];
     }
 
-    uint8(name, color, id) {
+    uint8(name, color = 'white', id) {
         this._segments.push({
-            name,
+            name: join(this._groups, name),
             color,
             length: 1,
             id,
@@ -29,9 +40,9 @@ export default class Format {
         return this;
     }
 
-    int8(name, color, id) {
+    int8(name, color = 'white', id) {
         this._segments.push({
-            name,
+            name: join(this._groups, name),
             color,
             length: 1,
             id,
@@ -42,7 +53,33 @@ export default class Format {
         return this;
     }
 
-    array(name, length, child) {
+    uint32(name, color = 'white', id) {
+        this._segments.push({
+            name: join(this._groups, name),
+            color,
+            length: 4,
+            id,
+            read(proxy, off) {
+                return new Uint32Array(proxy.read(off, 4))[0];
+            }
+        });
+        return this;
+    }
+
+    int32(name, color = 'white', id) {
+        this._segments.push({
+            name: join(this._groups, name),
+            color,
+            length: 4,
+            id,
+            read(proxy, off) {
+                return new Int32Array(proxy.read(off, 4))[0];
+            }
+        });
+        return this;
+    }
+
+    array(name, length, child = 'white') {
         const repeat = typeof length === 'string' ? data => 0 + data[length] : length;
 
         if (child instanceof Format) {
@@ -87,8 +124,22 @@ export default class Format {
         return this;
     }
 
+    child(c) {
+        return this.array(null, 1, c);
+    }
+
     sequence(child) {
         return this.array(null, Infinity, child);
+    }
+
+    group(name) {
+        this._groups.push(name);
+        return this;
+    }
+
+    endgroup() {
+        this._groups.pop();
+        return this;
     }
 
     *iterator(absoffset, variables) {

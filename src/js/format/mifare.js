@@ -1,74 +1,75 @@
 // This is a common format for all the Mifare Classic family file formats: 1K, 2K, 4K.
 
-function range(from, to) {
-    return Array.from({ length: to - from + 1 }, (_, i) => i + from);
-}
+import Format from 'hedit/format';
 
-function makeDataBlock(n) {
-    return {
-        description: 'Block #' + n,
-        color: 'white',
-        length: 16
-    };
-}
 
-function makeAppDirectoryBlock(n) {
-    return {
-        description: 'Block #' + n + ' (Mifare application directory)',
-        color: 'blue',
-        length: 16
-    };
-}
 
-function makeManufacturerBlock(n) {
-    return {
-        description: 'Block #' + n,
-        children: [
-            { description: 'UID', color: 'red', length: 4 },
-            { description: 'Manufacturer data', color: 'pink', length: 12 }
-        ],
-    };
-}
+// Block constructors
 
-function makeTrailerBlock(n) {
-    return {
-        description: 'Block #' + n,
-        children: [
-            { description: 'Key A',           color: 'green',   length: 6 },
-            { description: 'Access bits',     color: 'purple',  length: 3 },
-            { description: 'General purpose', color: 'white',   length: 1 },
-            { description: 'Key B',           color: 'orange',  length: 6 }
-        ]
-    };
-}
+const dataBlock = n =>
+    new Format()
+        .array('Block #' + n, 16);
 
-function makeSector(hasManufacturerBlock, hasAppDirectoryBlock, n) {
-    return {
-        description: 'Sector #' + n,
-        children: [
-            hasManufacturerBlock ? makeManufacturerBlock(n * 4) : (hasAppDirectoryBlock ? makeAppDirectoryBlock(n * 4) :  makeDataBlock(n * 4)),
-            hasAppDirectoryBlock ? makeAppDirectoryBlock(n * 4 + 1) : makeDataBlock(n * 4 + 1),
-            hasAppDirectoryBlock ? makeAppDirectoryBlock(n * 4 + 2) : makeDataBlock(n * 4 + 2),
-            makeTrailerBlock(n * 4 + 3)
-        ]
-    };
-}
+const madBlock = n =>
+    new Format()
+        .array('Block #' + n + ' (MAD)', 16, 'blue');
 
-function makeLargeSector(n) {
+const manufacturerBlock = n =>
+    new Format()
+        .group('Block #' + n)
+            .uint32('UID', 'red')
+            .array('Manufacturer data', 12, 'pink')
+        .endgroup();
+
+const trailerBlock = n =>
+    new Format()
+        .group('Block #' + n)
+            .array('Key A', 6, 'green')
+            .array('Access bits', 3, 'purple')
+            .array('General purpose', 1)
+            .array('Key B', 6, 'orange')
+        .endgroup();
+
+
+
+// Sector constructors
+
+const sector = (manufacturer, mad, n) =>
+    new Format()
+        .group('Sector #' + n)
+            .child(manufacturer ? manufacturerBlock(n * 4) : (
+                            mad ? madBlock(n * 4) :
+                                  dataBlock(n * 4)))
+            .child(mad ? madBlock(n * 4 + 1) : dataBlock(n * 4 + 1))
+            .child(mad ? madBlock(n * 4 + 2) : dataBlock(n * 4 + 2))
+            .child(trailerBlock(n * 4 + 3))
+        .endgroup();
+
+const largeSector = n => {
     const firstSector = (n - 32) * 16 + 128;
-    return {
-        description: 'Sector #' + n,
-        children: [
-            ...range(0, 14).map(i => makeSector(false, false, firstSector + i)),
-            makeTrailerBlock(firstSector + 15)
-        ]
-    };
+    const f = new Format().group('Sector #' + n);
+    for (let i = 0; i <= 14; i++) {
+        f.child(sector(false, false, firstSector + i));
+    }
+    f.child(trailerBlock(firstSector + 15));
+    return f.endgroup();
+};
+
+
+
+// Root format
+
+const f = new Format();
+f.child(sector(true, true, 0));
+for (let i = 1; i <= 15; i++) {
+    f.child(sector(false, false, i));
+}
+f.child(sector(false, true, 16));
+for (let i = 17; i <= 31; i++) {
+    f.child(sector(false, false, i));
+}
+for (let i = 32; i <= 39; i++) {
+    f.child(largeSector(i));
 }
 
-export default [
-    makeSector(true, true, 0),
-    ...range(1, 15).map(makeSector.bind(null, false, false)),
-    makeSector(false, true, 16),
-    ...range(17, 31).map(makeSector.bind(null, false, false)),
-    ...range(32, 39).map(makeLargeSector)
-];
+export default f;
