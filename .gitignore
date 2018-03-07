@@ -1,5 +1,6 @@
-out/
+build/
 docs/out/
 docs/node_modules/
 deps/.gclient*
 deps/v8/
+deps/libtickit
