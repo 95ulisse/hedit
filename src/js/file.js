@@ -9,7 +9,9 @@ class File extends EventEmitter {
 
     /**
      * Returns a boolean indicating whether a file is currently open or not.
+     * @alias module:hedit/file.isOpen
      * @type {boolean}
+     * @readonly
      */
     get isOpen() {
         return __hedit.file_isOpen();
@@ -17,7 +19,9 @@ class File extends EventEmitter {
 
     /**
      * Returns the name of the currently open file, or `null` if no file is open.
+     * @alias module:hedit/file.name
      * @type {?string}
+     * @readonly
      */
     get name() {
         return this.isOpen ? __hedit.file_name() : null;
@@ -25,7 +29,9 @@ class File extends EventEmitter {
 
     /**
      * Returns the size in bytes of the currently open file, or `-1` if no file is open.
+     * @alias module:hedit/file.size
      * @type {number}
+     * @readonly
      */
     get size() {
         return this.isOpen ? __hedit.file_size() : -1;
@@ -34,7 +40,9 @@ class File extends EventEmitter {
     /**
      * Returns a value indicating whether any modification to the file has been done
      * since it was open.
+     * @alias module:hedit/file.isDirty
      * @type {boolean}
+     * @readonly
      */
     get isDirty() {
         return this.isOpen && __hedit.file_isDirty();
@@ -42,6 +50,7 @@ class File extends EventEmitter {
 
     /**
      * Reverts the last change applied to the currently open file.
+     * @alias module:hedit/file.undo
      * @return {boolean} Returns `true` if the file changed, `false` otherwise.
      */
     undo() {
@@ -50,6 +59,7 @@ class File extends EventEmitter {
 
     /**
      * Reapplies the last undone change to the currently open file.
+     * @alias module:hedit/file.redo
      * @return {boolean} Returns `true` if the file changed, `false` otherwise.
      */
     redo() {
@@ -63,6 +73,7 @@ class File extends EventEmitter {
      * this means that you can perform multiple insertions and deletions
      * and commit them in a single atomically undoable revision.
      *
+     * @alias module:hedit/file.commit
      * @return {boolean} Returns `true` if the commit succeeded.
      */
     commit() {
@@ -71,6 +82,7 @@ class File extends EventEmitter {
 
     /**
      * Inserts new data into the currently open file.
+     * @alias module:hedit/file.insert
      * @param {number} pos - Position of the insertion.
      * @param {string} data - Data to insert.
      * @return {boolean} Returns `true` if the insertion succeeded.
@@ -81,6 +93,7 @@ class File extends EventEmitter {
 
     /**
      * Deletes a portion of the currently open file.
+     * @alias module:hedit/file.delete
      * @param {number} pos - Index of the first byte to delete.
      * @param {number} len - How many bytes to delete.
      * @return {boolean} Returns `true` if the deletion succeeded.
@@ -91,6 +104,7 @@ class File extends EventEmitter {
 
     /**
      * Reads a portion of the currently open file.
+     * @alias module:hedit/file.read
      * @param {number} pos - Index of the first byte to read.
      * @param {number} len - How many bytes to read.
      * @return {ArrayBuffer} ArrayBuffer with the contents of the file.

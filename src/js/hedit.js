@@ -126,7 +126,9 @@ class HEdit extends EventEmitter {
 
     /**
      * The name of the mode the editor is currently in.
+     * @alias module:hedit.mode
      * @type {string}
+     * @readonly
      */
     get mode() {
         return __hedit.mode();
@@ -134,7 +136,9 @@ class HEdit extends EventEmitter {
 
     /**
      * The name of the currently active view.
+     * @alias module:hedit.view
      * @type {string}
+     * @readonly
      */
     get view() {
         return __hedit.view();
@@ -181,6 +185,7 @@ class HEdit extends EventEmitter {
      *
      * For an example of the usage of `setTheme`, see {@tutorial colorful-statusbar}.
      *
+     * @alias module:hedit.setTheme
      * @param {object} t - Theme description.
      * @throws Throws if an invalid theme description is passed.
      * @see Usage example: {@tutorial colorful-statusbar}.
@@ -204,6 +209,7 @@ class HEdit extends EventEmitter {
 
     /**
      * Executes a command.
+     * @alias module:hedit.command
      * @param {string} cmd - Command to execute.
      * @return {boolean} Returns `true` if the command executed successfully, `false` otherwise.
      *
@@ -223,6 +229,7 @@ class HEdit extends EventEmitter {
 
     /**
      * Registers a new command, whose implementation is up to the user.
+     * @alias module:hedit.registerCommand
      * @param {string} name - Command name.
      * @param {CommandCallback} handler - Function implementing the command.
      * @throws Throws if the command registration fails.
@@ -250,6 +257,7 @@ class HEdit extends EventEmitter {
 
     /**
      * Registers a new option, whose implementation is up to the user.
+     * @alias module:hedit.registerOption
      * @param {string} name - Name of the option.
      * @param {string} defaultValue - Default option value.
      * @param {OptionCallback} handler - Function to be called when the value of the option changes.
@@ -280,6 +288,7 @@ class HEdit extends EventEmitter {
 
     /**
      * Registers a new key mapping.
+     * @alias module:hedit.map
      * @param {string} mode - Mode the new mapping is valid in.
      * @param {string} from - Key to map.
      * @param {string} to - The key sequence that the `from` key will be expanded to.
@@ -298,6 +307,7 @@ class HEdit extends EventEmitter {
 
     /**
      * Sets the value of an option.
+     * @alias module:hedit.set
      * @param {string} name - Option name.
      * @param {string|number} value - Value of the option.
      * @throws Throws if there's an error setting the option.
@@ -311,7 +321,9 @@ class HEdit extends EventEmitter {
         }
     }
 
-    /** Retrives the value of an option.
+    /**
+     * Retrives the value of an option.
+     * @alias module:hedit.get
      * @param {string} name - Option name.
      * @return {*} The current value of the option.
      * @throws Throws if the option name is invalid.
@@ -325,6 +337,7 @@ class HEdit extends EventEmitter {
 
     /**
      * Switches the editor to the given mode.
+     * @alias module:hedit.switchMode
      * @param {string} name - Name of the mode to switch to.
      *
      * @example
@@ -336,6 +349,7 @@ class HEdit extends EventEmitter {
 
     /**
      * Registers a new file format.
+     * @alias module:hedit.registerFormat
      * @param {string} name - Name of the format. Must be unique.
      * @param {object} [guess] - Hint for automatic selection of format on file open.
      * @param {string} guess.extension - Use this format for the files matching this extension.

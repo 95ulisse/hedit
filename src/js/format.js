@@ -79,6 +79,7 @@ class Format {
      *                                  and is expected to return an integer. If it is a string, it is treated as a
      *                                  shortcut for `vars => vars[length]`.
      * @param {Format} child - Child format to repeat.
+     * @return {Format}
      *
      *//**
      *
@@ -91,6 +92,7 @@ class Format {
      *                                  and is expected to return an integer. If it is a string, it is treated as a
      *                                  shortcut for `vars => vars[length]`.
      * @param {string} [color=white] - Color of the span.
+     * @return {Format}
      */
     array(name, length, child = 'white') {
         const repeat = typeof length === 'string' ? data => 0 + data[length] : length;
@@ -143,6 +145,7 @@ class Format {
      *
      * @param {string} name - Name of this span.
      * @param {Format} c - Child format to insert.
+     * @return {Format}
      *
      *//**
      *
@@ -150,6 +153,7 @@ class Format {
      * This is equivalent to `array(null, 1, c)`.
      *
      * @param {Format} c - Child format to insert.
+     * @return {Format}
      */
     child(name, c) {
         if (typeof c === 'undefined') {
@@ -165,6 +169,7 @@ class Format {
      *
      * @param {string} name - Name of this span.
      * @param {Format} c - Child format to repeat indefinitely.
+     * @return {Format}
      *
      *//**
      *
@@ -172,6 +177,7 @@ class Format {
      * This is equivalent to `array(null, Infinity, c)`.
      *
      * @param {Format} c - Child format to repeat indefinitely.
+     * @return {Format}
      */
     sequence(name, c) {
         if (typeof c === 'undefined') {
@@ -186,6 +192,8 @@ class Format {
      * There **must** be a matching call to [endgroup()]{@link Format#endgroup}.
      *
      * @param {string} name - Group name.
+     * @return {Format}
+     *
      * @example
      * // This generates the following two spans with the following names:
      * // Group > A byte
@@ -206,6 +214,8 @@ class Format {
     /**
      * Ends a group started with [group()]{@link Format#group}.
      * There **must** be a matching call to [group()]{@link Format#group}.
+     *
+     * @return {Format}
      *
      * @example
      * // This generates the following two spans with the following names:
@@ -322,6 +332,7 @@ function addCommonMethod(name, length, m, endianess) {
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 addCommonMethod('int8', 1, DataView.prototype.getInt8, false);
 
@@ -335,6 +346,7 @@ addCommonMethod('int8', 1, DataView.prototype.getInt8, false);
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 addCommonMethod('uint8', 1, DataView.prototype.getUint8, false);
 
@@ -349,6 +361,7 @@ addCommonMethod('uint8', 1, DataView.prototype.getUint8, false);
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 2 bytes to the current format.
@@ -361,6 +374,7 @@ addCommonMethod('uint8', 1, DataView.prototype.getUint8, false);
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 2 bytes to the current format.
@@ -373,6 +387,7 @@ addCommonMethod('uint8', 1, DataView.prototype.getUint8, false);
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 2 bytes to the current format.
@@ -385,6 +400,7 @@ addCommonMethod('uint8', 1, DataView.prototype.getUint8, false);
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 2 bytes to the current format.
@@ -397,6 +413,7 @@ addCommonMethod('uint8', 1, DataView.prototype.getUint8, false);
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 2 bytes to the current format.
@@ -409,6 +426,7 @@ addCommonMethod('uint8', 1, DataView.prototype.getUint8, false);
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 addCommonMethod('int16', 2, DataView.prototype.getInt16, true );
 addCommonMethod('uint16', 2, DataView.prototype.getUint16, true );
@@ -424,6 +442,7 @@ addCommonMethod('uint16', 2, DataView.prototype.getUint16, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 4 bytes to the current format.
@@ -436,6 +455,7 @@ addCommonMethod('uint16', 2, DataView.prototype.getUint16, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 4 bytes to the current format.
@@ -448,6 +468,7 @@ addCommonMethod('uint16', 2, DataView.prototype.getUint16, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 4 bytes to the current format.
@@ -460,6 +481,7 @@ addCommonMethod('uint16', 2, DataView.prototype.getUint16, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 4 bytes to the current format.
@@ -472,6 +494,7 @@ addCommonMethod('uint16', 2, DataView.prototype.getUint16, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 4 bytes to the current format.
@@ -484,6 +507,7 @@ addCommonMethod('uint16', 2, DataView.prototype.getUint16, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 addCommonMethod('int32', 4, DataView.prototype.getInt32, true );
 addCommonMethod('uint32', 4, DataView.prototype.getUint32, true );
@@ -499,6 +523,7 @@ addCommonMethod('uint32', 4, DataView.prototype.getUint32, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 4 bytes to the current format.
@@ -511,6 +536,7 @@ addCommonMethod('uint32', 4, DataView.prototype.getUint32, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 4 bytes to the current format.
@@ -523,6 +549,7 @@ addCommonMethod('uint32', 4, DataView.prototype.getUint32, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 addCommonMethod('float32', 4, DataView.prototype.getFloat32, true );
 
@@ -537,6 +564,7 @@ addCommonMethod('float32', 4, DataView.prototype.getFloat32, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 8 bytes to the current format.
@@ -549,6 +577,7 @@ addCommonMethod('float32', 4, DataView.prototype.getFloat32, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 /**
  * Adds a span of 8 bytes to the current format.
@@ -561,6 +590,7 @@ addCommonMethod('float32', 4, DataView.prototype.getFloat32, true );
  * @param {string?} name - Name of the span.
  * @param {string} [color=white] - Color of the span.
  * @param {string} [id] - Name of the variable in which to store the actual value of this byte.
+ * @return {Format}
  */
 addCommonMethod('float64', 8, DataView.prototype.getFloat64, true );
 
