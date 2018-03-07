@@ -1,3 +1,4 @@
 {
-    "colorful-statusbar": { "title": "A colorful statusbar" }
+    "colorful-statusbar": { "title": "A colorful statusbar" },
+    "formats": { "title": "File formats" }
 }

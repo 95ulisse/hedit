@@ -30,6 +30,10 @@ $ make
 # make install
 ```
 
+**Note**: `v8` takes **A LOT** of time to compile, so if you want to disable JavaScript integration,
+pass `-DWITH_V8=OFF` to `cmake`. This will disable all the features that depend on the JS integration,
+like syntax highlighting.
+
 The build output is in the `build` folder.
 
 ### Common build options
@@ -58,6 +62,7 @@ Template by [NHN Entertainment Corp](https://github.com/nhnent/tui.jsdoc-templat
 
 - [x] Undo/Redo
 - [x] Scriptability
-- [X] Write JS docs
-- [ ] Syntax highlighting
+- [x] Write JS docs
+- [x] Syntax highlighting
+- [ ] Improve performance of syntax highlighting
 - [ ] Structure view

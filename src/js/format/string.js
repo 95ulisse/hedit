@@ -2,11 +2,11 @@
 
 import Format from 'hedit/format';
 
-const string = file =>
-    new Format(file)
+const string =
+    new Format()
         .uint8('Length', 'red', 'strlen')
         .array('String', 'strlen', 'green');
 
-export default file =>
-    new Format(file)
-        .sequence(string(file));
+export default
+    new Format()
+        .sequence(string);

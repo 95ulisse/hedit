@@ -37,6 +37,17 @@ class FileProxy {
     }
 }
 
+/** Wrapper class that caches the values of a linearized format. */
+class FormatCache {
+    constructor(format) {
+        this._format = format;
+    }
+
+    [Symbol.iterator]() {
+        return this._format.__linearize(new FileProxy(), 0, '', Object.create(null));
+    }
+}
+
 export default {
 
     registerBuiltinFormat(formats) {
@@ -106,16 +117,12 @@ export default {
         }
 
         let f = format();
-        if (typeof f === 'function') {
-            f = f(new FileProxy());
-        }
-
         if (!(f instanceof Format)) {
-            log.error('Formats must be an instance of the Format class, or functions returning a Format.');
+            log.error('Formats must be an instance of the Format class.');
             return;
         }
 
-        __hedit.file_setFormat(f);
+        __hedit.file_setFormat(new FormatCache(f));
     }
 
 };

@@ -12,3 +12,16 @@ footer {
 #main {
     margin-bottom: 0 !important;
 }
+
+/* Refine signature attributes */
+.signature-attributes {
+    display: inline-block;
+    margin-left: 5px;
+    color: #aaa;
+}
+.signature-attributes:before {
+    content: "<";
+}
+.signature-attributes:after {
+    content: ">";
+}
