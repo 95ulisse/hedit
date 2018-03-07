@@ -131,9 +131,11 @@ add_custom_target (
 )
 add_custom_target (
     docs-publish
-	COMMAND git checkout gh-pages
-	COMMAND cp -R "${DOCS}/out/*" .
-	COMMAND git add .
-	COMMAND (git commit -m "Documentation update." && git push origin gh-pages) || true
-	COMMAND git checkout master
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    COMMAND git checkout gh-pages
+    COMMAND cp -R "${DOCS}/out/*" .
+    COMMAND git add .
+    COMMAND git commit -m "Documentation update." || true
+    COMMAND git push origin gh-pages || true
+    COMMAND git checkout master
 )
