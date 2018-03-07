@@ -25,3 +25,14 @@ footer {
 .signature-attributes:after {
     content: ">";
 }
+
+/* Give a little bit of space to some elements */
+.main section header h2 {
+    padding: 5px 10px !important;
+}
+.main section article h3.subsection-title {
+    padding: 35px 0 5px 5px !important;
+}
+.main section article dl dt .name {
+    padding: 5px 10px !important;
+}
