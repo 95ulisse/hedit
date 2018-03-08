@@ -28,3 +28,6 @@ Portions of this software are derived from third-party works:
 
 - test/ctest.h: header-only C unit test framework by Bas van den Berg, licensed under the Apache 2 license.
   https://github.com/bvdberg/ctest
+
+- test/should.js: assertion library by TJ Holowaychuk and Denis Bardadym, licensed under the MIT license.
+  https://github.com/shouldjs/should.js

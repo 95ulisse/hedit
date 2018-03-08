@@ -2,17 +2,22 @@
 set_source_files_properties ("${GEN}/js-builtin-modules.cc" PROPERTIES GENERATED TRUE)
 
 # Test sources
-file (GLOB_RECURSE TEST_SOURCES
-      "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
-      "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+file (GLOB_RECURSE TEST_NATIVE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/native/*.c")
 
-# Build a hedit_test executable
-add_executable (hedit_test ${TEST_SOURCES})
-target_include_directories (hedit_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_options (hedit_test PUBLIC "-D_DEFAULT_SOURCE")
-target_link_libraries (hedit_test hedit_lib)
+# Build two different executables for the native and js tests
+
+add_executable (hedit_test_native main_native.c ${TEST_NATIVE_SOURCES})
+target_include_directories (hedit_test_native PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_options (hedit_test_native PUBLIC "-D_DEFAULT_SOURCE")
+target_link_libraries (hedit_test_native hedit_lib)
+
+add_executable (hedit_test_js main_js.cc)
+target_link_libraries (hedit_test_js hedit_lib stdc++fs)
 
 add_custom_target (
     check
-    COMMAND hedit_test
+    COMMAND cmake -E cmake_echo_color --magenta --bold "Running native tests..."
+    COMMAND hedit_test_native
+    COMMAND cmake -E cmake_echo_color --magenta --bold "Running JavaScript tests..."
+    COMMAND hedit_test_js "${CMAKE_CURRENT_SOURCE_DIR}/should.js" "${CMAKE_CURRENT_SOURCE_DIR}/js"
 )

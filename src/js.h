@@ -7,6 +7,7 @@
 
 #ifdef __cplusplus
 
+#include <map>
 #include <v8.h>
 
 class JsBuiltinModule {
