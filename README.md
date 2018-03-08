@@ -36,6 +36,15 @@ like syntax highlighting.
 
 The build output is in the `build` folder.
 
+### Running tests
+
+To run the tests, go to the `buid` directory and invoke the `check` target:
+
+```
+cd build
+make check
+```
+
 ### Common build options
 
 There are some common options to pass to `cmake` to customize the build:
