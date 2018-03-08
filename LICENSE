@@ -25,3 +25,6 @@ Portions of this software are derived from third-party works:
 
 - scripts/rjsmin.py: fast JS minifier in Python by André Malo, licensed under the Apache 2 license.
   https://github.com/ndparker/rjsmin
+
+- test/ctest.h: header-only C unit test framework by Bas van den Berg, licensed under the Apache 2 license.
+  https://github.com/bvdberg/ctest

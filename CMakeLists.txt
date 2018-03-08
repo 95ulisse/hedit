@@ -93,32 +93,39 @@ include_directories ("${GEN}")
 # Source files
 file (GLOB_RECURSE SOURCES "${SRC}/*.c" "${SRC}/*.cc")
 
-# Final executable
-add_executable (hedit ${SOURCES})
-target_link_libraries (hedit "${DEPS}/libtickit/.libs/libtickit.a")
-target_link_libraries (hedit "m" "pthread" "termkey" "unibilium")
-add_dependencies (hedit libtickit)
+# Group all the sources in a library so that they can also be used for testing
+add_library (hedit_lib ${SOURCES})
+target_link_libraries (hedit_lib "${DEPS}/libtickit/.libs/libtickit.a")
+target_link_libraries (hedit_lib "m" "pthread" "termkey" "unibilium")
+add_dependencies (hedit_lib libtickit)
 if (WITH_V8)
-    target_link_libraries (hedit -Wl,--start-group "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libplatform.a"
-                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_base.a"
-                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libbase.a"
-                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_nosnapshot.a"
-                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libsampler.a"
-                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_initializers.a"
-                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_init.a"
-                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicui18n.a"
-                                                   "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicuuc.a"
-                                 -Wl,--end-group)
-    target_sources (hedit PUBLIC "${GEN}/js-builtin-modules.cc")
+    target_link_libraries (hedit_lib -Wl,--start-group "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libplatform.a"
+                                                       "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_base.a"
+                                                       "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libbase.a"
+                                                       "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_nosnapshot.a"
+                                                       "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_libsampler.a"
+                                                       "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_initializers.a"
+                                                       "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/src/libv8_init.a"
+                                                       "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicui18n.a"
+                                                       "${DEPS}/v8/out/${V8_ARCH}.release/obj.target/third_party/icu/libicuuc.a"
+                                     -Wl,--end-group)
+    target_sources (hedit_lib PUBLIC "${GEN}/js-builtin-modules.cc")
     set_source_files_properties ("${SRC}/format-empty.c" PROPERTIES HEADER_FILE_ONLY TRUE)
-    add_dependencies (hedit v8)
+    add_dependencies (hedit_lib v8)
 else ()
     set_source_files_properties ("${SRC}/js.cc" PROPERTIES HEADER_FILE_ONLY TRUE)
 endif ()
 
+# Final executable
+add_executable (hedit "${SRC}/main.c")
+target_link_libraries (hedit hedit_lib)
+
 # Install
 install (TARGETS hedit
          RUNTIME DESTINATION bin)
+
+# Tests
+add_subdirectory (test)
 
 # JS Docs
 add_custom_target (
