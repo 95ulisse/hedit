@@ -1142,7 +1142,8 @@ bool hedit_file_visit(File* file, size_t start, size_t len, bool (*visitor)(File
     list_for_each_member(p, &file->pieces, Piece, list) {
         if (off + p->size >= start) {
             size_t piece_start = off <= start ? start - off : 0;
-            if (!visitor(file, off + piece_start, p->data + piece_start, p->size - piece_start, user)) {
+            size_t piece_len = p->size - piece_start - (off + p->size >= start + len ? off + p->size - start - len : 0);
+            if (!visitor(file, off + piece_start, p->data + piece_start, piece_len, user)) {
                 return false;
             }
         }

@@ -2,6 +2,7 @@
 #define __FILE_H__
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
