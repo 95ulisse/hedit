@@ -4,8 +4,10 @@
 #include <string.h>
 #include <iostream>
 #include <sstream>
+#include <chrono>
 #include <sys/types.h>
 #include <dirent.h>
+#include <unistd.h>
 
 #include <libplatform/libplatform.h>
 #include <v8.h>
@@ -13,6 +15,7 @@
 #include "js.h"
 
 using namespace std;
+using namespace std::chrono;
 using namespace v8;
 
 static inline void fatal(string str) {
@@ -120,42 +123,82 @@ static MaybeLocal<Module> EvalModule(const char* origin_str, const char* content
 
 
 
-unsigned int _total = 0;
-unsigned int _failure = 0;
+enum Color {
+    Reset = 0,
+    Bold = 1,
+    Red = 31,
+    Green = 32,
+    Gray = 90,
+    Orange = 93
+};
 
-void ReportSuiteBegin(string suite) {
+class TColor {
+public:
+    TColor(Color c) : _color(c) {}
+
+    friend ostream& operator<<(ostream& os, const TColor& c) {
+        if (&os == &cout && !_isatty) {
+            return os;
+        } else {
+            return os << "\033[" << c._color << "m";
+        }
+    }
+
+private:
+    Color _color;
+    static bool _isatty;
+};
+
+bool TColor::_isatty = isatty(1);
+
+
+
+static unsigned int _total = 0;
+static unsigned int _failure = 0;
+
+static void ReportSuiteBegin(string suite) {
     cout << suite << endl;
 }
 
-void ReportSuiteEnd(string suite) {
+static void ReportSuiteEnd(string suite) {
 }
 
-void ReportSuccess(string suite, string test_name) {
-    cout << "    " << test_name << " \033[1;32m[OK]\033[0m" << endl;
+static string PrettifyName(string& name) {
+    string str = regex_replace(name, regex("[A-Z]"), " $&").substr(1);
+    transform(str.begin() + 1, str.end(), str.begin() + 1, ::tolower);
+    return str;
+}
+
+static void ReportSuccess(string test_name, high_resolution_clock::time_point start_time, high_resolution_clock::time_point end_time) {
+    auto ms = (duration_cast<milliseconds>(end_time - start_time)).count();
+    cout << "    " << PrettifyName(test_name) << " " << TColor(Bold) << TColor(Green) << "[OK] " << TColor(Reset)
+         << TColor(ms < 100 ? Gray : Orange) << "[" << ms << "ms]" << TColor(Reset) << endl;
     _total++;
 }
 
-void ReportFailure(string suite, string test_name, string msg) {
+static void ReportFailure(string test_name, string msg) {
     msg = regex_replace(msg, regex("\\n"), "\n        ");
-    cout << "    " << test_name << " \033[1;31m[FAIL]\033[0m" << endl
-         << "        \033[31m" << msg << "\033[0m" << endl;
+    cout << "    " << PrettifyName(test_name) << " " << TColor(Bold) << TColor(Green) << "[FAIL]" << TColor(Reset) << endl
+         << "        " << TColor(Red) << msg << TColor(Reset) << endl;
 
     _total++;
     _failure++;
 }
 
-void ReportFinalResults() {
-    cout << "\033[1m" << (_failure == 0 ? "\033[32m" : "\033[31m");
-    cout << "Results: " << _total << " tests (" << (_total - _failure) << " passed, " << _failure << " failed)" << endl;
-    cout << "\033[0m";
+static void ReportFinalResults(high_resolution_clock::time_point start_time, high_resolution_clock::time_point end_time) {
+    auto secs = (duration_cast<duration<double>>(end_time - start_time)).count();
+    cout << TColor(Bold) << TColor(_failure == 0 ? Green : Red);
+    cout << "Results: " << _total << " tests (" << (_total - _failure) << " passed, " << _failure << " failed) in " << secs << " seconds" << endl;
+    cout << TColor(Reset);
 }
 
-void RunTests(string suite, Local<Module> m) {
+static void RunTests(string suite, Local<Module> m) {
     Isolate* isolate = Isolate::GetCurrent();
     HandleScope handle_scope(isolate);
     Local<Context> ctx = isolate->GetCurrentContext();
 
     ReportSuiteBegin(suite);
+    auto start_time = high_resolution_clock::now();
 
     // Each exported value is a test to run
     Local<Object> obj = Local<Object>::Cast(m->GetModuleNamespace());
@@ -176,22 +219,22 @@ void RunTests(string suite, Local<Module> m) {
                 MaybeLocal<v8::Value> stack = ex_obj->Get(ctx, v8_str("stack"));
                 if (!stack.IsEmpty()) {
                     String::Utf8Value stack_str(isolate, stack.ToLocalChecked());
-                    ReportFailure(suite, c_str(key_str), c_str(stack_str));
+                    ReportFailure(c_str(key_str), c_str(stack_str));
                 } else {
-                    ReportFailure(suite, c_str(key_str), c_str(str));
+                    ReportFailure(c_str(key_str), c_str(str));
                 }
             } else {
-                ReportFailure(suite, c_str(key_str), c_str(str));
+                ReportFailure(c_str(key_str), c_str(str));
             }
         } else {
-            ReportSuccess(suite, c_str(key_str));
+            ReportSuccess(c_str(key_str), start_time, high_resolution_clock::now());
         }
     }
 
     ReportSuiteEnd(suite);
 }
 
-void EmptyCallback(const FunctionCallbackInfo<v8::Value>& args) {
+static void EmptyCallback(const FunctionCallbackInfo<v8::Value>& args) {
 }
 
 int main(int argc, const char* argv[]) {
@@ -229,6 +272,8 @@ int main(int argc, const char* argv[]) {
         string should_js_contents = readwhole(should_js_path);
         EvalModule(should_js_path.c_str(), should_js_contents.c_str(), should_js_contents.size()).ToLocalChecked();
 
+        auto start_time = high_resolution_clock::now();
+
         // Cycle all the test files
         DIR* dir = opendir(test_dir.c_str());
         struct dirent* de;
@@ -242,7 +287,7 @@ int main(int argc, const char* argv[]) {
         }
         closedir(dir);
 
-        ReportFinalResults();
+        ReportFinalResults(start_time, high_resolution_clock::now());
     }
  
     // Dispose the isolate and tear down V8.
