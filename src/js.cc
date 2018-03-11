@@ -595,7 +595,8 @@ static void FileName(const FunctionCallbackInfo<v8::Value>& args) {
     assert(args.Length() == 0);
     assert(hedit->file != NULL);
 
-    args.GetReturnValue().Set(v8_str(hedit_file_name(hedit->file)));
+    const char* fname = hedit_file_name(hedit->file);
+    args.GetReturnValue().Set(fname != NULL ? (Local<v8::Value>) v8_str(fname) : (Local<v8::Value>) Null(isolate));
 }
 
 // __hedit.file_size();

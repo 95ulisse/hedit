@@ -78,11 +78,12 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
         char* format_name = ((Option*) map_get(statusbar->hedit->options, "format"))->value.str;
         bool format_is_none = strcmp("none", format_name) == 0;
 
+        const char* fname = hedit_file_name(f);
         int buf_size = tickit_window_cols(win) + 1;
         char buf[buf_size];
         int printed =
             snprintf(buf, buf_size, "%s %s%s%s%s",
-                hedit_file_name(f),
+                fname == NULL ? "<no name>" : fname,
                 hedit_file_is_ro(f) ? "[ro] " : "",
                 format_is_none ? "" : "[",
                 format_is_none ? "" : format_name,

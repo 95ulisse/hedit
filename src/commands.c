@@ -40,7 +40,7 @@ static bool quit(HEdit* hedit, bool force, ArgIterator* args, void* user) {
 
 static bool edit(HEdit* hedit, bool force, ArgIterator* args, void* user) {
 
-    if (hedit->file != NULL) {
+    if (hedit->file != NULL && !force) {
         log_error("Another file is already opened.");
         return false;
     }
@@ -54,6 +54,38 @@ static bool edit(HEdit* hedit, bool force, ArgIterator* args, void* user) {
     File* f = hedit_file_open(path);
     if (f == NULL) {
         return false;
+    }
+
+    if (hedit->file != NULL) {
+        event_fire(&hedit->ev_file_close, hedit, hedit->file);
+        hedit_file_close(hedit->file);
+    }
+
+    hedit->file = f;
+    hedit_format_guess(hedit);
+    event_fire(&hedit->ev_file_open, hedit, hedit->file);
+
+    hedit_switch_view(hedit, HEDIT_VIEW_EDIT);
+
+    return true;
+}
+
+static bool new(HEdit* hedit, bool force, ArgIterator* args, void* user) {
+
+    if (hedit->file != NULL && !force) {
+        log_error("Another file is already opened.");
+        return false;
+    }
+
+    File* f = hedit_file_open(NULL);
+    if (f == NULL) {
+        return false;
+    }
+
+    // Close the exiting file (if any)
+    if (hedit->file != NULL) {
+        event_fire(&hedit->ev_file_close, hedit, hedit->file);
+        hedit_file_close(hedit->file);
     }
 
     hedit->file = f;
@@ -99,6 +131,11 @@ static bool write(HEdit* hedit, bool force, ArgIterator* args, void* user) {
     const char* name = it_next(args);
     if (name == NULL) {
         name = hedit_file_name(hedit->file);
+    }
+
+    if (name == NULL) {
+        log_error("Missing file name.");
+        return false;
     }
 
     event_fire(&hedit->ev_file_before_write, hedit, hedit->file);
@@ -213,6 +250,7 @@ bool hedit_init_commands(HEdit* hedit) {
     REG2(quit, q);
     REG2(edit, e);
     REG(close);
+    REG(new);
     REG2(write, w);
     REG(wq);
     REG(set);
