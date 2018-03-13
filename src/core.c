@@ -5,11 +5,13 @@
 #include <errno.h>
 #include <tickit.h>
 
+#include "build-config.h"
 #include "core.h"
 #include "actions.h"
 #include "commands.h"
 #include "options.h"
 #include "statusbar.h"
+#include "js.h"
 #include "util/log.h"
 #include "util/map.h"
 #include "util/buffer.h"
@@ -389,7 +391,8 @@ void hedit_switch_theme(HEdit* hedit, Theme* newtheme) {
 
 
 bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type, const Value default_value,
-                           bool (*on_change)(HEdit*, Option*, const Value*, void* user), void* user)
+                           bool (*on_change)(HEdit*, Option*, const Value*, void* user),
+                           void (*free_f)(HEdit*, Option*, void* user), void* user)
 {
     assert(type >= HEDIT_OPTION_TYPE_INT && type <= HEDIT_OPTION_TYPE_MAX);
 
@@ -412,6 +415,7 @@ bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type,
     opt->default_value = default_value;
     opt->value = default_value;
     opt->on_change = on_change;
+    opt->free = free_f;
     opt->user = user;
 
     // Duplicate the default value if the type of the option is a string
@@ -544,6 +548,9 @@ static bool free_option(const char* key, void* value, void* data) {
         free(opt->default_value.str);
         free(opt->value.str);
     }
+    if (opt->free != NULL) {
+        opt->free((HEdit*) data, opt, opt->user);
+    }
     free(opt);
     return true;
 }
@@ -572,7 +579,7 @@ static bool init_builtin_options(HEdit* hedit) {
     // Register all the options!
 
 #define REG(name, type, def, on_change) \
-    if (!hedit_option_register(hedit, name, HEDIT_OPTION_TYPE_##type, (const Value) def, on_change, NULL)) { \
+    if (!hedit_option_register(hedit, name, HEDIT_OPTION_TYPE_##type, (const Value) def, on_change, NULL, NULL)) { \
         return false; \
     }
 
@@ -835,6 +842,14 @@ HEdit* hedit_core_init(Options* cli_options, Tickit* tickit) {
     hedit_switch_mode(hedit, HEDIT_MODE_NORMAL);
     hedit_switch_view(hedit, HEDIT_VIEW_SPLASH);
 
+    // Initialize V8
+#ifdef WITH_V8
+    if (!hedit_js_init(hedit)) {
+        log_fatal("Cannot initialize V8.");
+        goto error;
+    }
+#endif
+
     // Exit with success
     return hedit;
 
@@ -897,15 +912,21 @@ void hedit_core_teardown(HEdit* hedit) {
     }
 
     // Options
-    map_iterate(hedit->options, free_option, NULL);
+    map_iterate(hedit->options, free_option, hedit);
     map_free(hedit->options);
 
     // Commands
-    map_free_full(hedit->commands);
+    hedit_command_free_all(hedit);
+    map_free(hedit->commands);
 
     // Destroy the view window
     tickit_window_close(hedit->viewwin);
     tickit_window_destroy(hedit->viewwin);
+
+    // Terminate V8
+#ifdef WITH_V8
+    hedit_js_teardown(hedit);
+#endif
 
     // Free the global state
     free(hedit);

@@ -397,6 +397,19 @@ static bool JsCommandHandler(HEdit* hedit, bool force, ArgIterator* arg, void* u
     return true;
 }
 
+static void JsCommandFree(HEdit* hedit, void* user) {
+    
+    // Enter the js user context
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = user_context.Get(isolate);
+    Context::Scope context_scope(ctx);
+
+    Persistent<Function>* handler = static_cast<Persistent<Function>*>(user);
+    handler->Reset();
+    delete handler;
+}
+
 // __hedit.registerCommand("name", function(args) {});
 static void RegisterCommand(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
@@ -413,7 +426,7 @@ static void RegisterCommand(const FunctionCallbackInfo<v8::Value>& args) {
     String::Utf8Value command_name(isolate, args[0]);
     Persistent<Function>* handler = new Persistent<Function>(isolate, Local<Function>::Cast(args[1]));
 
-    bool res = hedit_command_register(hedit, *command_name, JsCommandHandler, handler);
+    bool res = hedit_command_register(hedit, *command_name, JsCommandHandler, JsCommandFree, handler);
     args.GetReturnValue().Set(res);
 
     if (!res) {
@@ -525,6 +538,19 @@ static bool JsOptionHandler(HEdit* hedit, Option* opt, const ::Value* v, void* u
     return ret->BooleanValue(ctx).FromMaybe(false);
 }
 
+static void JsOptionFree(HEdit* hedit, Option* opt, void* user) {
+    
+    // Enter the js user context
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Local<Context> ctx = user_context.Get(isolate);
+    Context::Scope context_scope(ctx);
+
+    auto handler = (Persistent<Function>*) user;
+    handler->Reset();
+    delete handler;
+}
+
 // __hedit.registerOption("name", "defaultValue", handler);
 static void RegisterOption(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
@@ -543,7 +569,7 @@ static void RegisterOption(const FunctionCallbackInfo<v8::Value>& args) {
     Persistent<Function>* handler = new Persistent<Function>(isolate, Local<Function>::Cast(args[2]));
 
     ::Value v = { 0, false, *defaultValue };
-    bool res = hedit_option_register(hedit, *name, HEDIT_OPTION_TYPE_STRING, v, JsOptionHandler, handler);
+    bool res = hedit_option_register(hedit, *name, HEDIT_OPTION_TYPE_STRING, v, JsOptionHandler, JsOptionFree, handler);
     args.GetReturnValue().Set(res);
 
     if (!res) {
@@ -1053,7 +1079,7 @@ bool hedit_js_init(HEdit* hedit) {
     return true;
 }
 
-void hedit_js_teardown() {
+void hedit_js_teardown(HEdit* hedit) {
     log_debug("V8 teardown.");
 
     // Remove event handlers and brokers

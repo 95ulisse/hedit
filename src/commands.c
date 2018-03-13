@@ -18,6 +18,7 @@ struct ArgIterator {
 /** Type of the command handlers. */
 typedef struct {
     bool (*handler)(HEdit*, bool force, ArgIterator* args, void* user);
+    void (*free)(HEdit*, void* user);
     void* user;
 } Command;
 
@@ -213,7 +214,10 @@ static bool logview(HEdit* hedit, bool force, ArgIterator* args, void* user) {
 
 
 
-bool hedit_command_register(HEdit* hedit, const char* name, bool (*cb)(HEdit*, bool, ArgIterator*, void*), void* user) {
+bool hedit_command_register(HEdit* hedit, const char* name,
+                            bool (*cb)(HEdit*, bool, ArgIterator*, void* user),
+                            void (*free_f)(HEdit*, void* user), void* user)
+{
 
     Command* cmd = malloc(sizeof(Command));
     if (cmd == NULL) {
@@ -221,6 +225,7 @@ bool hedit_command_register(HEdit* hedit, const char* name, bool (*cb)(HEdit*, b
         return false;
     }
     cmd->handler = cb;
+    cmd->free = free_f;
     cmd->user = user;
 
     if (!map_put(hedit->commands, name, cmd)) {
@@ -234,6 +239,19 @@ bool hedit_command_register(HEdit* hedit, const char* name, bool (*cb)(HEdit*, b
     return true;
 }
 
+static bool free_command(const char* key, void* value, void* data) {
+    Command* cmd = value;
+    if (cmd->free != NULL) {
+        cmd->free((HEdit*) data, cmd->user);
+    }
+    free(cmd);
+    return true;
+}
+
+void hedit_command_free_all(HEdit* hedit) {
+    map_iterate(hedit->commands, free_command, hedit);
+}
+
 bool hedit_init_commands(HEdit* hedit) {
 
     // Allocate the map
@@ -243,8 +261,8 @@ bool hedit_init_commands(HEdit* hedit) {
         return false;
     }
 
-#define REG(c) hedit_command_register(hedit, #c, c, NULL);
-#define REG2(c, alias) REG(c); hedit_command_register(hedit, #alias, c, NULL);
+#define REG(c) hedit_command_register(hedit, #c, c, NULL, NULL);
+#define REG2(c, alias) REG(c); hedit_command_register(hedit, #alias, c, NULL, NULL);
 
     // Register the single commands.
     REG2(quit, q);
@@ -255,7 +273,7 @@ bool hedit_init_commands(HEdit* hedit) {
     REG(wq);
     REG(set);
     REG(map);
-    hedit_command_register(hedit, "log", logview, NULL);
+    hedit_command_register(hedit, "log", logview, NULL, NULL);
 
     return true;
 

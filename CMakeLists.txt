@@ -17,10 +17,10 @@ endif()
 
 # Compiler options
 set (CMAKE_C_FLAGS "-std=c99 -Wall -Werror -Wno-error=missing-braces -pedantic -D_POSIX_C_SOURCE=200809L")
-set (CMAKE_C_FLAGS_DEBUG "-g -DDEBUG")
+set (CMAKE_C_FLAGS_DEBUG "-g -DDEBUG -fsanitize=address")
 set (CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
 set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror -pedantic")
-set (CMAKE_CXX_FLAGS_DEBUG "-g -DDEBUG")
+set (CMAKE_CXX_FLAGS_DEBUG "-g -DDEBUG -fsanitize=address")
 set (CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 # Version number

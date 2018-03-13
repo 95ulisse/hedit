@@ -39,7 +39,7 @@ CTEST2(buffer, string_insert_middle) {
     buffer_put_string(data->buf, "held");
     buffer_move_cursor(data->buf, -2);
     buffer_put_string(data->buf, "llo wor");
-    char str[11];
+    char str[12];
     buffer_copy_to(data->buf, str);
     ASSERT_STR("hello world", str);
 }

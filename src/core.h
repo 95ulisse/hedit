@@ -145,6 +145,7 @@ struct Option {
     Value default_value;
     Value value;
     bool (*on_change)(HEdit*, Option*, const Value*, void* user);
+    void (*free)(HEdit*, Option*, void* user);
     void* user;
 };
 
@@ -237,7 +238,8 @@ void hedit_switch_theme(HEdit* hedit, Theme* theme);
 
 /** Registers a new option. */
 bool hedit_option_register(HEdit* hedit, const char* name, enum OptionType type, const Value default_value,
-                           bool (*on_change)(HEdit*, Option*, const Value*, void* user), void* user);
+                           bool (*on_change)(HEdit*, Option*, const Value*, void* user),
+                           void (*free)(HEdit*, Option*, void* user), void* user);
 
 /** Changes the value of an option. */
 bool hedit_option_set(HEdit* hedit, const char* name, const char* newvalue);

@@ -18,7 +18,12 @@ typedef struct ArgIterator ArgIterator;
 bool hedit_init_commands(HEdit*);
 
 /** Registers a new command. */
-bool hedit_command_register(HEdit*, const char* name, bool (*cb)(HEdit*, bool, ArgIterator*, void*), void* user);
+bool hedit_command_register(HEdit*, const char* name,
+                            bool (*cb)(HEdit*, bool, ArgIterator*, void* user),
+                            void (*free)(HEdit*, void* user), void* user);
+
+/** Frees all the commands registered in the given HEdit instance. */
+void hedit_command_free_all(HEdit*);
 
 /**
  * Executes the command specified in the given string.

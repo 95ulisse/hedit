@@ -52,7 +52,7 @@ extern "C" {
 bool hedit_js_init(HEdit*);
 
 /** Releases all the resources held by V8. This must be called at most once. */
-void hedit_js_teardown();
+void hedit_js_teardown(HEdit*);
 
 #ifdef __cplusplus
 }
