@@ -51,10 +51,14 @@ CTEST2(file, initial_state) {
 CTEST2(file, insert) {
     hedit_file_insert(data->file, 0, "hello", 5);
     ASSERT_FILE("hello", data->file);
-    hedit_file_insert(data->file, 5, "world", 5);
-    ASSERT_FILE("helloworld", data->file);
-    hedit_file_insert(data->file, 5, " ", 1);
-    ASSERT_FILE("hello world", data->file);
+    hedit_file_insert(data->file, 0, "<", 1);
+    ASSERT_FILE("<hello", data->file);
+    hedit_file_insert(data->file, 6, "world", 5);
+    ASSERT_FILE("<helloworld", data->file);
+    hedit_file_insert(data->file, 6, " ", 1);
+    ASSERT_FILE("<hello world", data->file);
+    hedit_file_insert(data->file, 12, ">", 1);
+    ASSERT_FILE("<hello world>", data->file);
     ASSERT_TRUE(hedit_file_is_dirty(data->file));
 }
 

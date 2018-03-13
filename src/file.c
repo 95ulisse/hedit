@@ -75,9 +75,10 @@
  * =======
  *
  * While creating a piece is cheap, creating a piece for every single inserted char is a bit excessive,
- * so we make an exception to the rule: all memory blocks **except the last one** are immutable.
- * When we insert a new sequence of bytes, we append it to the last allocated memory block,
- * and then create a piece pointing to that new string.
+ * so we make an exception to the rule: all memory blocks and pieces **except the last ones** are immutable.
+ * When we insert a new sequence of bytes, we first check if they need to be appended to the last modified piece:
+ * if it is the case, we can just extend the last piece without creating a new one. This has the disadvantage that
+ * consecutive edits are not undoable separately.
  *
  *
  *
@@ -150,6 +151,7 @@ struct File {
     struct list_head all_revisions; // File history
 
     struct list_head pieces; // Current active pieces
+    Piece* cache; // Last modified piece for caching
 
     Revision* current_revision; // Pointer to the current active revision
     struct list_head pending_changes; // Changes not yet attached to a revision
@@ -175,6 +177,11 @@ static unsigned char* block_append(Block*, const unsigned char* data, size_t len
 static Piece* piece_alloc(File*);
 static void piece_free(Piece*);
 static bool piece_find(File*, size_t abs, Piece** piece, size_t* offset);
+
+// Functions to manage the piece cache
+static void cache_put(File*, Piece*);
+static bool cache_insert(File*, Piece*, size_t piece_offset, const unsigned char* data, size_t len);
+static bool cache_delete(File*, Piece*, size_t piece_offset, size_t len);
 
 // Functions to manage spans and changes
 static void span_init(Span*, Piece* start, Piece* end);
@@ -306,6 +313,82 @@ static bool piece_find(File* file, size_t abs, Piece** piece, size_t* offset) {
     }
 
     return false;
+}
+
+static void cache_put(File* file, Piece* piece) {
+    file->cache = piece;
+
+    if (piece != NULL) {
+        // The piece we use as cache must use as a backing block the last one
+        // and must end exactly where the last block ends
+        Block* blk = list_last(&file->all_blocks, Block, list);
+        assert(piece->data + piece->size == blk->data + blk->len);
+    }
+}
+
+static bool cache_insert(File* file, Piece* piece, size_t piece_offset, const unsigned char* data, size_t len) {
+    if (file->cache == NULL || file->cache != piece) {
+        return false;
+    }
+
+    // The cached piece must always be the last one created
+    Block* blk = list_last(&file->all_blocks, Block, list);
+    assert(piece->data + piece->size == blk->data + blk->len);
+
+    // Insertion can happen only if the block can fit the new data
+    if (!block_can_fit(blk, len)) {
+        return false;
+    }
+
+    // Insert the data in the block
+    unsigned char* blk_insertion = blk->data + blk->len - (piece->size - piece_offset);
+    assert(blk_insertion >= blk->data);
+    if (blk_insertion == blk->data + blk->len) {
+        block_append(blk, data, len);
+    } else {
+        memmove(blk_insertion + len, blk_insertion, piece->size - piece_offset);
+        memmove(blk_insertion, data, len);
+        blk->len += len;
+    }
+
+    // Update the counters
+    piece->size += len;
+    file->size += len;
+    Change* change = list_last(&file->pending_changes, Change, list);
+    change->replacement.len += len;
+
+    return true;
+}
+
+static bool cache_delete(File* file, Piece* piece, size_t piece_offset, size_t len) {
+    if (file->cache == NULL || file->cache != piece) {
+        return false;
+    }
+    
+    // The cached piece must always be the last one created
+    Block* blk = list_last(&file->all_blocks, Block, list);
+    assert(piece->data + piece->size == blk->data + blk->len);
+
+    // Deletion can happen only if the whole deletion range is in the cached piece
+    if (piece->size - piece_offset < len) {
+        return false;
+    }
+
+    // Delete the data from the block
+    unsigned char* blk_del = blk->data + blk->len - (piece->size - piece_offset);
+    assert(blk_del >= blk->data);
+    if (blk_del < blk->data + blk->len) {
+        memmove(blk_del, blk_del + len, piece->size - piece_offset - len);
+    }
+    blk->len -= len;
+
+    // Update the counters
+    piece->size -= len;
+    file->size -= len;
+    Change* change = list_last(&file->pending_changes, Change, list);
+    change->replacement.len -= len;
+
+    return true;
 }
 
 static void span_init(Span* span, Piece* start, Piece* end) {
@@ -858,6 +941,20 @@ bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, siz
     // Discard any redo history
     revision_purge(file);
 
+    // First try with the cached piece.
+    // If we are inserting at the beginning of a piece, check if the previous one was cached and try using it
+    if (piece != NULL) {
+        if (cache_insert(file, piece, piece_offset, data, len)) {
+            return true;
+        }
+        if (piece_offset == 0 && list_first(&file->pieces, Piece, list) != piece) {
+            Piece* prev = list_prev(piece, Piece, list);
+            if (cache_insert(file, prev, prev->size, data, len)) {
+                return true;
+            }
+        }
+    }
+
     // Let's see if we can reuse the last block to store the new data
     Block* b;
     if (!list_empty(&file->all_blocks) && block_can_fit(list_last(&file->all_blocks, Block, list), len)) {
@@ -885,10 +982,12 @@ bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, siz
         return false;
     }
 
+    Piece* new;
+
     if (piece == NULL) {
         // We have no piece to attach to because this is the first insertion to an empty file
 
-        Piece* new = piece_alloc(file);
+        new = piece_alloc(file);
         if (new == NULL) {
             return false;
         }
@@ -905,7 +1004,7 @@ bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, siz
         // For how we counted offsets, the only way that the `piece_offset == piece->size` condition
         // can be true is when we are inserting at the end of the file.
 
-        Piece* new = piece_alloc(file);
+        new = piece_alloc(file);
         if (new == NULL) {
             return false;
         }
@@ -952,9 +1051,12 @@ bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, siz
         span_init(&change->original, piece, piece);
         span_init(&change->replacement, before, after);
     
+        new = middle;
+
     }
 
     // Apply the prepared change
+    cache_put(file, new);
     span_swap(file, &change->original, &change->replacement);
     file->dirty = true;
     return true;
@@ -988,6 +1090,11 @@ bool hedit_file_delete(File* file, size_t offset, size_t len) {
 
     // Discard any redo history
     revision_purge(file);
+
+    // First try with the cached piece
+    if (cache_delete(file, start_piece, start_piece_offset, len)) {
+        return true;
+    }
 
     // Deletion range can both start and end up in the middle of a piece.
     // This means that we might have to create new pieces to account for the split pieces.
@@ -1073,6 +1180,9 @@ bool hedit_file_commit_revision(File* file) {
         file->pending_changes.prev->next = &rev->changes;
         list_init(&file->pending_changes);
     }
+    
+    // Invalidate piece cache
+    cache_put(file, NULL);
 
     return true;
 }
