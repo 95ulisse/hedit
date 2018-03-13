@@ -18,6 +18,8 @@ static struct option long_options[] = {
     { "debug-colors",       no_argument,       NULL,  0  },
     { "debug-min-severity", required_argument, NULL,  0  },
 
+    { "command",            required_argument, NULL, 'c' },
+
     { "help",               no_argument,       NULL, 'h' },
     { "version",            no_argument,       NULL, 'v' },
 
@@ -28,6 +30,8 @@ static struct option long_options[] = {
 static void print_usage(const char* selfpath) {
     fprintf(stderr,
         "Usage: %s [filename] [-hv]\n"
+        "\n"
+        "-c, --command                Execute a command when the editor starts.\n"
         "\n"
         "Debug options:\n"
         "-D, --debug-fd               Output debug information to the given file descriptor.\n"
@@ -69,14 +73,19 @@ bool options_parse(Options* options, int argc, char** argv) {
     log_min_severity(LOG_DEBUG);
     options->show_help = false;
     options->show_version = false;
+    options->command = NULL;
     options->file = NULL;
 
     // Args parsing
     int opt;
     int longopt_index;
-    while ((opt = getopt_long(argc, argv, "D:hv", long_options, &longopt_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "c:D:hv", long_options, &longopt_index)) != -1) {
         switch (opt) {
             
+            case 'c':
+                options->command = optarg;
+                break;
+
             case 'D': {
                 // Check that the argument is a valid writable file descriptor
                 int fd = -1;

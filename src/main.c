@@ -35,20 +35,25 @@ static int do_register_sigint(Tickit* t, TickitEventFlags flags, void* user) {
     return 1;
 }
 
-static int do_open_file(Tickit *t, TickitEventFlags flags, void *user) {
-    HEdit* hedit = user;
-    
-    const char* path = hedit->cli_options->file;
-    tickit_term_input_push_bytes(tickit_get_term(t), ":edit ", 6);
-    tickit_term_input_push_bytes(tickit_get_term(t), path, strlen(path));
-    
-    hedit_emit_keys(hedit, "<Enter>");
-
-    return 1;
-}
-
 static int on_tickit_ready(Tickit *t, TickitEventFlags flags, void *user) {
     HEdit* hedit = user;
+
+    // Open a file if specified in the cli
+    const char* path = hedit->cli_options->file;
+    if (path != NULL) {
+        tickit_term_input_push_bytes(tickit_get_term(t), ":edit ", 6);
+        tickit_term_input_push_bytes(tickit_get_term(t), path, strlen(path));
+        hedit_emit_keys(hedit, "<Enter>");
+    }
+
+    // Execute the initial command specified in the cli
+    const char* cmd = hedit->cli_options->command;
+    if (cmd != NULL) {
+        tickit_term_input_push_bytes(tickit_get_term(t), ":", 1);
+        tickit_term_input_push_bytes(tickit_get_term(t), cmd, strlen(cmd));
+        hedit_emit_keys(hedit, "<Enter>");
+    }
+
     event_fire(&hedit->ev_load, hedit);
     return 1;
 }
@@ -92,11 +97,6 @@ int main(int argc, char** argv) {
     // Fire the load event as soon as everything is ready
     tickit_later(tickit, 0, do_register_sigint, hedit);
     tickit_later(tickit, 0, on_tickit_ready, hedit);
-
-    // If a file name has been passed on the command line, issue an :edit command
-    if (options.file != NULL) {
-        tickit_later(tickit, 0, do_open_file, hedit);
-    }
 
     if (sigsetjmp(sigint_jmpbuf, true) == 1) {
         // We ended up here because of a SIGINT, so translate it to a C-c
