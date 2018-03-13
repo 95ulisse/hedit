@@ -318,12 +318,14 @@ static bool piece_find(File* file, size_t abs, Piece** piece, size_t* offset) {
 static void cache_put(File* file, Piece* piece) {
     file->cache = piece;
 
+#ifdef DEBUG
     if (piece != NULL) {
         // The piece we use as cache must use as a backing block the last one
         // and must end exactly where the last block ends
         Block* blk = list_last(&file->all_blocks, Block, list);
         assert(piece->data + piece->size == blk->data + blk->len);
     }
+#endif
 }
 
 static bool cache_insert(File* file, Piece* piece, size_t piece_offset, const unsigned char* data, size_t len) {
