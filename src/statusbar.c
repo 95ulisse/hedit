@@ -50,10 +50,9 @@ void command_visitor(Buffer* buf, size_t pos, const char* str, size_t len, void*
             tickit_renderbuffer_textn(rb, str, cursorpos - 1);
         }
 
-        tickit_renderbuffer_savepen(rb);
         tickit_renderbuffer_setpen(rb, theme->block_cursor);
         tickit_renderbuffer_textn(rb, str + cursorpos, 1);
-        tickit_renderbuffer_restore(rb);
+        tickit_renderbuffer_setpen(rb, theme->commandbar);
 
         if (cursorpos < len - 1) {
             tickit_renderbuffer_textn(rb, str + cursorpos + 1, len - cursorpos - 1);
@@ -68,72 +67,102 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
     Statusbar* statusbar = user;
     TickitExposeEventInfo* e = info;
 
-    // Clear first line
-    tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->statusbar);
-    tickit_renderbuffer_eraserect(e->rb, &(TickitRect){ .top = 0, .left = 0, .lines = 1, .cols = tickit_window_cols(win) });
+    bool redraw_first = e->rect.top == 0 && e->rect.lines >= 1;
+    bool redraw_second = e->rect.top <= 1 && e->rect.top + e->rect.lines >= 2;
 
-    // Open file info on the right
-    if (statusbar->hedit->file != NULL) {
-        File* f = statusbar->hedit->file;
-        char* format_name = ((Option*) map_get(statusbar->hedit->options, "format"))->value.str;
-        bool format_is_none = strcmp("none", format_name) == 0;
+    log_debug("Statusbar redraw: Top: %d, Left: %d, %dx%d", e->rect.top, e->rect.left, e->rect.cols, e->rect.lines);
+    log_debug("Statusbar redraw: First: %d, Second: %d", redraw_first, redraw_second);
 
-        const char* fname = hedit_file_name(f);
-        int buf_size = tickit_window_cols(win) + 1;
-        char buf[buf_size];
-        int printed =
-            snprintf(buf, buf_size, "%s %s%s%s%s",
-                fname == NULL ? "<no name>" : fname,
-                hedit_file_is_ro(f) ? "[ro] " : "",
-                format_is_none ? "" : "[",
-                format_is_none ? "" : format_name,
-                format_is_none ? "" : "] "
-            );
-        buf[buf_size - 1] = '\0';
-        tickit_renderbuffer_text_at(e->rb, 0, tickit_window_cols(win) - MIN(printed, buf_size - 1), buf);
+    if (redraw_first) {
+
+        // Clear first line
+        tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->statusbar);
+        tickit_renderbuffer_eraserect(e->rb, &(TickitRect){ .top = 0, .left = 0, .lines = 1, .cols = tickit_window_cols(win) });
+    
+        // Open file info on the right
+        if (statusbar->hedit->file != NULL) {
+            File* f = statusbar->hedit->file;
+            char* format_name = ((Option*) map_get(statusbar->hedit->options, "format"))->value.str;
+            bool format_is_none = strcmp("none", format_name) == 0;
+    
+            const char* fname = hedit_file_name(f);
+            int buf_size = tickit_window_cols(win) + 1;
+            char buf[buf_size];
+            int printed =
+                snprintf(buf, buf_size, "%s %s%s%s%s",
+                    fname == NULL ? "<no name>" : fname,
+                    hedit_file_is_ro(f) ? "[ro] " : "",
+                    format_is_none ? "" : "[",
+                    format_is_none ? "" : format_name,
+                    format_is_none ? "" : "] "
+                );
+            buf[buf_size - 1] = '\0';
+            tickit_renderbuffer_text_at(e->rb, 0, tickit_window_cols(win) - MIN(printed, buf_size - 1), buf);
+        }
+    
+        // Current mode on the left
+        tickit_renderbuffer_textf_at(e->rb, 0, 0, " -- %s --", statusbar->hedit->mode->display_name);
+
     }
 
-    // Current mode on the left
-    tickit_renderbuffer_textf_at(e->rb, 0, 0, " -- %s --", statusbar->hedit->mode->display_name);
+    if (redraw_second) {
 
-    // Clear second line
-    tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->commandbar);
-    tickit_renderbuffer_eraserect(e->rb, &(TickitRect){ .top = 1, .left = 0, .lines = 1, .cols = tickit_window_cols(win) });
-
-    tickit_renderbuffer_goto(e->rb, 1, 0);
-
-    // Draw the command line to reflect the current buffer contents.
-    // It should never happen that we have to show an error while the user is typing a command.
-    Buffer* buf = statusbar->hedit->command_buffer;
-    if (buf != NULL) {
-
-        tickit_renderbuffer_text(e->rb, ":");
-
-        struct command_visitor_params params = {
-            .rb = e->rb,
-            .theme = statusbar->hedit->theme
-        };
-        buffer_visit(buf, command_visitor, &params);
-
-        // As a special case, if the cursor is right at the end of the string,
-        // add a fake space just to show the cursor
-        if (buffer_get_cursor(buf) == buffer_get_len(buf)) {
-            tickit_renderbuffer_savepen(e->rb);
-            tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->block_cursor);
-            tickit_renderbuffer_text(e->rb, " ");
-            tickit_renderbuffer_restore(e->rb);
+        // Clear second line
+        tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->commandbar);
+        tickit_renderbuffer_eraserect(e->rb, &(TickitRect){ .top = 1, .left = 0, .lines = 1, .cols = tickit_window_cols(win) });
+    
+        tickit_renderbuffer_goto(e->rb, 1, 0);
+    
+        // Draw the command line to reflect the current buffer contents.
+        // It should never happen that we have to show an error while the user is typing a command.
+        Buffer* buf = statusbar->hedit->command_buffer;
+        if (buf != NULL) {
+    
+            tickit_renderbuffer_text(e->rb, ":");
+    
+            struct command_visitor_params params = {
+                .rb = e->rb,
+                .theme = statusbar->hedit->theme
+            };
+            buffer_visit(buf, command_visitor, &params);
+    
+            // As a special case, if the cursor is right at the end of the string,
+            // add a fake space just to show the cursor
+            if (buffer_get_cursor(buf) == buffer_get_len(buf)) {
+                tickit_renderbuffer_setpen(e->rb, statusbar->hedit->theme->block_cursor);
+                tickit_renderbuffer_text(e->rb, " ");
+            }
+    
+        } else if (statusbar->show_last_message) {
+    
+            // Draw the message
+            tickit_renderbuffer_setpen(e->rb, statusbar->last_message_is_error ? statusbar->hedit->theme->error : statusbar->hedit->theme->text);
+            tickit_renderbuffer_text(e->rb, statusbar->last_message);
+    
         }
-
-    } else if (statusbar->show_last_message) {
-
-        // Draw the message
-        tickit_renderbuffer_setpen(e->rb, statusbar->last_message_is_error ? statusbar->hedit->theme->error : statusbar->hedit->theme->text);
-        tickit_renderbuffer_text(e->rb, statusbar->last_message);
 
     }
 
     return 1;
 
+}
+
+static inline void redraw(Statusbar* statusbar) {
+    tickit_window_expose(statusbar->win, NULL);
+}
+
+static inline void redraw_first_line(Statusbar* statusbar) {
+    tickit_window_expose(
+        statusbar->win,
+        &(TickitRect) { .top = 0, .left = 0, .cols = tickit_window_cols(statusbar->win), .lines = 1 }
+    );
+}
+
+static inline void redraw_second_line(Statusbar* statusbar) {
+    tickit_window_expose(
+        statusbar->win,
+        &(TickitRect) { .top = 1, .left = 0, .cols = tickit_window_cols(statusbar->win), .lines = 1 }
+    );
 }
 
 static int on_resize(TickitWindow* win, TickitEventFlags flags, void* info, void* user) {
@@ -150,8 +179,8 @@ static int on_resize(TickitWindow* win, TickitEventFlags flags, void* info, void
         .cols = parentgeom.cols
     });
 
-    // Force a repaint
-    tickit_window_expose(statusbar->win, NULL);
+    // Force a redraw
+    redraw(statusbar);
 
     return 1;
     
@@ -165,13 +194,13 @@ static void on_mode_switch(void* user, HEdit* hedit, Mode* new, Mode* old) {
         statusbar->show_last_message = false;
     }
 
-    // Force a redraw of the statusbar window
-    tickit_window_expose(statusbar->win, NULL);
+    // Force a redraw of the first line
+    redraw_first_line(statusbar);
 }
 
 static void on_file_event(void* user, HEdit* hedit, File* file) {
     Statusbar* statusbar = user;
-    tickit_window_expose(statusbar->win, NULL);
+    redraw_first_line(statusbar);
 }
 
 static void on_log_message(void* user, struct log_config* config, const char* file, int line, log_severity severity, const char* format, va_list args) {
@@ -191,7 +220,7 @@ static void on_log_message(void* user, struct log_config* config, const char* fi
     statusbar->show_last_message = true;
 
     // Force a redraw
-    tickit_window_expose(statusbar->win, NULL);
+    redraw_second_line(statusbar);
 }
 
 Statusbar* hedit_statusbar_init(HEdit* hedit) {
@@ -254,10 +283,16 @@ void hedit_statusbar_teardown(Statusbar* statusbar) {
 }
 
 void hedit_statusbar_redraw(Statusbar* statusbar) {
-    tickit_window_expose(statusbar->win, NULL);
+    redraw(statusbar);
 }
 
 void hedit_statusbar_show_message(Statusbar* statusbar, bool sticky, const char* msg) {
+    
+    // Do not show a normal message if an error is visible and has not been explicitely cleared
+    if (msg != NULL && statusbar->show_last_message && statusbar->last_message_is_error) {
+        return;
+    }
+
     if (msg == NULL) {
         statusbar->show_last_message = false;
     } else {
@@ -268,5 +303,5 @@ void hedit_statusbar_show_message(Statusbar* statusbar, bool sticky, const char*
         statusbar->show_last_message = true;
     }
 
-    hedit_statusbar_redraw(statusbar);
+    redraw_second_line(statusbar);
 }

@@ -19,6 +19,14 @@
         __a > __b ? __a : __b; \
     })
 
+#define CLAMP(v, min, max) \
+    __extension__({ \
+        __typeof__(v) __v = (v); \
+        __typeof__(min) __min = (min); \
+        __typeof__(max) __max = (max); \
+        __v < __min ? __min : (__v > __max ? __max : __v); \
+    })
+
 #ifndef offsetof
 #define offsetof(type, member) ((size_t) &((type*) 0)->member)
 #endif

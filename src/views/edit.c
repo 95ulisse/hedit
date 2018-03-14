@@ -97,6 +97,12 @@ static void draw_bytes(HEdit* hedit, TickitRenderBuffer* rb, size_t padding, siz
 
             tickit_renderbuffer_setpen(rb, hedit->theme->soft_cursor);
             tickit_renderbuffer_textf_at(rb, line, ascii_col, "%c", isprint(data[i]) ? data[i] : '.');
+
+            // Show on the statusbar the name of the segment the cursor is on
+            if (seg != NULL && cursor_pos >= seg->from && cursor_pos <= seg->to) {
+                hedit_statusbar_show_message(hedit->statusbar, true, seg->name);
+            }
+
         }
     }
 
@@ -107,6 +113,14 @@ static void draw_bytes(HEdit* hedit, TickitRenderBuffer* rb, size_t padding, siz
         int cursor_col = padding + ((window_offset + len) % colwidth) * 3;
         tickit_renderbuffer_setpen(rb, hedit->theme->block_cursor);
         tickit_renderbuffer_text_at(rb, line, cursor_col, " ");
+
+        // Show on the statusbar the name of the segment the cursor is on
+        while (seg != NULL && cursor_pos > seg->to) {
+            seg = hedit_format_iter_next(format_it);
+        }
+        if (seg != NULL && cursor_pos >= seg->from && cursor_pos <= seg->to) {
+            hedit_statusbar_show_message(hedit->statusbar, true, seg->name);
+        }
     }
 
 }
@@ -126,7 +140,7 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
 
     // Set the normal pen for the text
     tickit_renderbuffer_setpen(e->rb, hedit->theme->text);
-    tickit_renderbuffer_clear(e->rb);
+    tickit_renderbuffer_eraserect(e->rb, &e->rect);
 
     /**
      * We want to draw each line like this:
@@ -136,9 +150,12 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
      * 00000000: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa  ................
      */
 
-    int lines = tickit_window_lines(win);
-    FileIterator* file_it = hedit_file_iter(hedit->file, state->scroll_lines * colwidth, colwidth * lines);
-    FormatIterator* format_it = hedit_format_iter(hedit->format, state->scroll_lines * colwidth);
+    // We need to redraw only the lines affected by the exposure,
+    // so we only iterate the portion of the file starting at the first invalidated line
+    size_t iter_from = (state->scroll_lines + e->rect.top) * colwidth;
+    size_t iter_count = e->rect.lines * colwidth;
+    FileIterator* file_it = hedit_file_iter(hedit->file, iter_from, iter_count);
+    FormatIterator* format_it = hedit_format_iter(hedit->format, iter_from);
 
     // Iterate over the portion of the file we have to draw
     size_t off = 0; // Relative to the first byte to draw
@@ -146,29 +163,41 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
     size_t len;
     while (hedit_file_iter_next(file_it, &data, &len)) {
         draw_bytes(hedit, e->rb, lineoffset ? lineoffset_len + 2 : 0, colwidth,
-                   off + state->scroll_lines * colwidth, off, state->cursor_pos, state->left,
+                   off + iter_from, off + (e->rect.top * colwidth), state->cursor_pos, state->left,
                    data, len, format_it);
         off += len;
+    }
+
+    // Force at least one iteration to draw the cursor at the end of the file
+    if (off == 0) {
+        draw_bytes(hedit, e->rb, lineoffset ? lineoffset_len + 2 : 0, colwidth,
+                   off + iter_from, off + (e->rect.top * colwidth), state->cursor_pos, state->left,
+                   NULL, 0, format_it);
     }
     
     hedit_format_iter_free(format_it);
     hedit_file_iter_free(file_it);
 
+    // Lines of the exposed rect that we filled with the actual file bytes
+    int used_lines = hedit_file_size(hedit->file) / colwidth + 1;
+    used_lines = CLAMP(used_lines - state->scroll_lines - e->rect.top, 0, e->rect.lines);
+
     // Draw the line offsets
     if (lineoffset) {
-        int used_lines = hedit_file_size(hedit->file) / colwidth + 1;
         tickit_renderbuffer_setpen(e->rb, hedit->theme->linenos);
-        for (int i = 0; i < MIN(used_lines, lines); i++) {
-            tickit_renderbuffer_textf_at(e->rb, i, 0, lineoffset_format, (i + state->scroll_lines) * colwidth);
+        for (int i = 0; i < used_lines; i++) {
+            tickit_renderbuffer_textf_at(
+                e->rb, e->rect.top + i, 0,
+                lineoffset_format, (i + e->rect.top + state->scroll_lines) * colwidth
+            );
         }
     }
 
     // Fill the remaining lines with `~`
-    int emptylines = lines - (hedit_file_size(hedit->file) / colwidth + 1);
-    if (emptylines > 0) {
+    if (used_lines < e->rect.lines) {
         tickit_renderbuffer_setpen(e->rb, hedit->theme->linenos);
-        for (int i = 1; i <= emptylines; i++) {
-            tickit_renderbuffer_text_at(e->rb, lines - i, 0, "~");
+        for (int i = used_lines; i <= e->rect.lines; i++) {
+            tickit_renderbuffer_text_at(e->rb, e->rect.top + i, 0, "~");
         }
     }
 
@@ -178,6 +207,9 @@ static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
     ViewState* state = hedit->viewdata;
     size_t colwidth = ((Option*) map_get(hedit->options, "colwidth"))->value.i;
     size_t pagesize = colwidth * tickit_window_lines(hedit->viewwin);
+
+    size_t old_cursor_pos = state->cursor_pos;
+    size_t old_scroll_lines = state->scroll_lines;
 
     switch (m) {
         case HEDIT_MOVEMENT_LEFT:
@@ -252,15 +284,25 @@ static void on_movement(HEdit* hedit, enum Movement m, size_t arg) {
         state->scroll_lines = cursor_line - windowlines + 1;
     }
 
-    // Ask the current format for a description to show on the statusbar
-    FormatIterator* format_it = hedit_format_iter(hedit->format, state->cursor_pos);
-    FormatSegment* seg = hedit_format_iter_next(format_it);
-    if (seg != NULL && state->cursor_pos >= seg->from && state->cursor_pos <= seg->to) {
-        hedit_statusbar_show_message(hedit->statusbar, false, seg->name);
+    // Calculate the area to invalidate
+    TickitRect rect = {
+        .left = 0,
+        .cols = tickit_window_cols(hedit->viewwin),
+    };
+    if (old_scroll_lines != state->scroll_lines) {
+        rect.top = 0;
+        rect.lines = tickit_window_lines(hedit->viewwin);
+    } else {
+        size_t old_line = old_cursor_pos / colwidth;
+        size_t new_line = state->cursor_pos / colwidth;
+        rect.top = MIN(old_line, new_line) - state->scroll_lines;
+        rect.lines = MAX(old_line, new_line) - MIN(old_line, new_line) + 1;
     }
-    hedit_format_iter_free(format_it);
 
-    hedit_redraw_view(hedit);
+    // Empty the statusbar
+    hedit_statusbar_show_message(hedit->statusbar, false, NULL);
+
+    tickit_window_expose(hedit->viewwin, &rect);
 }
 
 static void on_input(HEdit* hedit, const char* key, bool replace) {

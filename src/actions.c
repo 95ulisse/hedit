@@ -78,6 +78,10 @@ static void command_exec(HEdit* hedit, const Value* arg) {
 
 }
 
+static void clear_error(HEdit* hedit, const Value* arg) {
+    hedit_statusbar_show_message(hedit->statusbar, false, NULL);
+}
+
 const Action hedit_actions[] = {
 
     // Mode switch
@@ -175,6 +179,11 @@ const Action hedit_actions[] = {
     },
     [HEDIT_ACTION_COMMAND_EXEC] = {
         command_exec
+    },
+
+    // Misc
+    [HEDIT_ACTION_CLEAR_ERROR] = {
+        clear_error
     }
 
 };
@@ -191,6 +200,7 @@ typedef struct {
 static const KeyBinding* bindings[] = {
 
     [HEDIT_MODE_NORMAL] = (const KeyBinding[]){
+        { "<Escape>",        ACTION(CLEAR_ERROR)         },
         { "i",               ACTION(MODE_INSERT)         },
         { "R",               ACTION(MODE_REPLACE)        },
         { ":",               ACTION(MODE_COMMAND)        },
