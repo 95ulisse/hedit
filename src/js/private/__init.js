@@ -11,6 +11,7 @@ __hedit.registerFormatGuessFunction(format.guessFormat);
 format.registerBuiltinFormat({
     'none':    null,
     'mifare':  { extension: 'mfd' },
+    'luks':    { magic: new Uint8Array([ 0x4c, 0x55, 0x4b, 0x53, 0xba, 0xbe ]) },
     'string':  { magic: new Uint8Array([ 0x0a ]) }
 });
 
