@@ -70,9 +70,6 @@ static int on_expose(TickitWindow* win, TickitEventFlags flags, void* info, void
     bool redraw_first = e->rect.top == 0 && e->rect.lines >= 1;
     bool redraw_second = e->rect.top <= 1 && e->rect.top + e->rect.lines >= 2;
 
-    log_debug("Statusbar redraw: Top: %d, Left: %d, %dx%d", e->rect.top, e->rect.left, e->rect.cols, e->rect.lines);
-    log_debug("Statusbar redraw: First: %d, Second: %d", redraw_first, redraw_second);
-
     if (redraw_first) {
 
         // Clear first line
