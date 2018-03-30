@@ -161,11 +161,10 @@ struct File {
 };
 
 struct FileIterator {
+    File* file;
     size_t max_off; // Maximum offset requested by the user
-    size_t current_off;
+    size_t current_off; // Offset we have iterated to until now
     Piece* current_piece;
-    const unsigned char* current_data;
-    size_t current_len;
 };
 
 
@@ -1309,50 +1308,47 @@ FileIterator* hedit_file_iter(File* file, size_t start, size_t len) {
         log_fatal("Out of memory.");
         return NULL;
     }
+
+    it->file = file;
+    it->current_off = start;
+    it->max_off = MIN(start + len, file->size);
     
-    if (start >= file->size || len == 0) {
-        // Return an empty iterator
-        return it;
-    }
-
-    // Find the piece containing the first byte
-    size_t off = 0;
-    list_for_each_member(p, &file->pieces, Piece, list) {
-        if (off + p->size > start) {
-            size_t piece_start = off <= start ? start - off : 0;
-            it->max_off = MIN(off + piece_start + len, file->size);
-            it->current_off = off;
-            it->current_piece = p;
-            it->current_data = p->data + piece_start;
-            it->current_len = MIN(p->size - piece_start, len);
-            break;
-        }
-        off += p->size;
-    }
-
-    assert(it->current_data != NULL);
-    assert(it->current_len > 0);
-
     return it;
 
 }
 
 bool hedit_file_iter_next(FileIterator* it, const unsigned char** data, size_t* len) {
+    
     if (it->current_off >= it->max_off) {
         return false;
     }
+    
+    // Find the piece containing the first byte if this is the first call to `next`
+    if (it->current_piece == NULL) {
+        size_t start = it->current_off;
+        size_t off = 0;
+        list_for_each_member(p, &it->file->pieces, Piece, list) {
+            if (off + p->size > start) {
+                size_t piece_start = off <= start ? start - off : 0;
+                it->current_piece = p;
+                *data = p->data + piece_start;
+                *len = MIN(p->size - piece_start, it->max_off - start);
+                break;
+            }
+            off += p->size;
+        }
 
-    // In the iterator, there's a cached version of the next data
-    *data = it->current_data;
-    *len = it->current_len;
+    } else {
 
-    // Advance the iterator and compute the next data to return
-    Piece* p = list_next(it->current_piece, Piece, list);
-    it->current_piece = p;
-    it->current_off += p->size;
-    it->current_data = p->data;
-    it->current_len = p->size - (it->current_off > it->max_off ? it->current_off - it->max_off : 0);
-
+        // Advance the iterator
+        Piece* p = list_next(it->current_piece, Piece, list);
+        it->current_piece = p;
+        *data = p->data;
+        *len = it->current_off + p->size > it->max_off ? it->max_off - it->current_off : p->size;
+        
+    }
+    
+    it->current_off += *len;
     return true;
 
 }

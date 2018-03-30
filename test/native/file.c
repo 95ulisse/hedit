@@ -9,8 +9,8 @@
 
 
 // Asserts that the contents of a File are equal to the given string
-void ASSERT_FILE(const unsigned char* expected, File* file) {
-    FileIterator* it = hedit_file_iter(file, 0, hedit_file_size(file));
+void ASSERT_FILE2(const unsigned char* expected, File* file, size_t offset, size_t len) {
+    FileIterator* it = hedit_file_iter(file, offset, len);
 
     size_t pos = 0;
     const unsigned char* chunk;
@@ -21,7 +21,10 @@ void ASSERT_FILE(const unsigned char* expected, File* file) {
     }
 
     hedit_file_iter_free(it);
-    ASSERT_EQUAL(hedit_file_size(file), pos);
+    ASSERT_EQUAL(len, pos);
+}
+void ASSERT_FILE(const unsigned char* expected, File* file) {
+    ASSERT_FILE2(expected, file, 0, hedit_file_size(file));
 }
 
 
@@ -241,6 +244,22 @@ CTEST2(file, visit_stops_if_visitor_returns_false) {
     int invocations = 0;
     ASSERT_FALSE(hedit_file_visit(data->file, 0, 1, visitor2, &invocations));
     ASSERT_EQUAL(2, invocations);
+}
+
+CTEST2(file, iterator_can_iter_portions_of_pieces) {
+    hedit_file_insert(data->file, 0, " world", 6);
+    hedit_file_insert(data->file, 0, "hello", 5);
+
+    ASSERT_FILE("hello world", data->file);
+    ASSERT_FILE2("he", data->file, 0, 2);
+    ASSERT_FILE2("el", data->file, 1, 2);
+    ASSERT_FILE2("hello", data->file, 0, 5);
+    ASSERT_FILE2("hello wo", data->file, 0, 8);
+    ASSERT_FILE2("lo wo", data->file, 3, 5);
+    ASSERT_FILE2(" worl", data->file, 5, 5);
+    ASSERT_FILE2(" world", data->file, 5, 6);
+    ASSERT_FILE2("or", data->file, 7, 2);
+    ASSERT_FILE2("ld", data->file, 9, 2);
 }
 
 
