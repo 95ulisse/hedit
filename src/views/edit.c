@@ -67,9 +67,7 @@ static void draw_bytes(HEdit* hedit, TickitRenderBuffer* rb, size_t padding, siz
         TickitPen* pen = hedit->theme->text;
         if (seg != NULL) {
             size_t off = abs_offset + i;
-            while (seg != NULL && off > seg->to) {
-                seg = hedit_format_iter_next(format_it);
-            }
+            seg = hedit_format_iter_seek(format_it, off);
             if (seg != NULL && off >= seg->from && off <= seg->to) {
                 pen = pens[MIN(seg->color, sizeof(pens) / sizeof(pens[0]))];
             }
@@ -115,9 +113,7 @@ static void draw_bytes(HEdit* hedit, TickitRenderBuffer* rb, size_t padding, siz
         tickit_renderbuffer_text_at(rb, line, cursor_col, " ");
 
         // Show on the statusbar the name of the segment the cursor is on
-        while (seg != NULL && cursor_pos > seg->to) {
-            seg = hedit_format_iter_next(format_it);
-        }
+        seg = hedit_format_iter_seek(format_it, cursor_pos);
         if (seg != NULL && cursor_pos >= seg->from && cursor_pos <= seg->to) {
             hedit_statusbar_show_message(hedit->statusbar, true, seg->name);
         }
@@ -155,7 +151,8 @@ static void on_draw(HEdit* hedit, TickitWindow* win, TickitExposeEventInfo* e) {
     size_t iter_from = (state->scroll_lines + e->rect.top) * colwidth;
     size_t iter_count = e->rect.lines * colwidth;
     FileIterator* file_it = hedit_file_iter(hedit->file, iter_from, iter_count);
-    FormatIterator* format_it = hedit_format_iter(hedit->format, iter_from);
+    FormatIterator* format_it = hedit_format_iter(hedit->format);
+    hedit_format_iter_seek(format_it, iter_from);
 
     // Iterate over the portion of the file we have to draw
     size_t off = 0; // Relative to the first byte to draw

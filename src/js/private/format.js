@@ -1,6 +1,7 @@
 import file from 'hedit/file';
 import Format from 'hedit/format';
 import log from 'hedit/log';
+import IntervalTree from 'hedit/private/intervaltree';
 
 /** A reverse lookup to provide fast automatic guesses of file formats. */
 const guessLookup = {
@@ -30,10 +31,22 @@ const allFormats = {};
 
 /** Proxy class that records and aggregates the access to the underlying file data. */
 class FileProxy {
+    constructor() {
+        this._accessed = new IntervalTree();
+    }
+
     read(offset, len) {
+        this._accessed.insert(offset, offset + len - 1);
         const val = file.read(offset, len);
         log.info(`Read caught: [${offset}, ${offset + len - 1}] => ${new Uint8Array(val)}`);
         return val;
+    }
+
+    hasRead(offset, len) {
+        if (len < 0) {
+            return false;
+        }
+        return this._accessed.search(offset, offset + len - 1).length > 0;
     }
 }
 
@@ -41,12 +54,105 @@ class FileProxy {
 class FormatCache {
     constructor(format) {
         this._format = format;
+        this.invalidate();
     }
 
+    /** Invalidates all the cached data. */
+    invalidate() {
+        this._fileProxy = new FileProxy();
+        this._generator = this._format.__linearize(this._fileProxy, 0, '', Object.create(null));
+        this._cachedSegments = [];
+        this._cachedTree = new IntervalTree();
+    }
+
+    /**
+     * This method is called from the native code to get an iterator every time the screen needs to be repainted.
+     * The iterator returned must also expose a `seek` method to position the iterator at a given byte offset.
+     * 
+     * The returned iterator iterates over the cached segments and advances the underlying format iterator
+     * only when needed.
+     */
     [Symbol.iterator]() {
-        return this._format.__linearize(new FileProxy(), 0, '', Object.create(null));
+        let i = 0;
+        let ended = false;
+
+        return {
+            next: function () {
+
+                // Do nothing if the iterator ended already
+                if (ended) {
+                    return { done: true };
+                }
+
+                // Return a cached segment if available
+                if (i < this._cachedSegments.length) {
+                    i++;
+                    return { value: this._cachedSegments[i], done: false };
+                }
+                
+                // Otherwise advance the original generator and cache the new segment
+                const { done, value } = this._generator.next();
+                if (done) {
+                    ended = true;
+                    return { done: true };
+                } else {
+                    this._cachedSegments.push(value);
+                    this._cachedTree.insert(value.from, value.to, [ i, value ]);
+                    i++;
+                    return { value, done: false };
+                }
+                
+            }.bind(this),
+            
+            seek: function (pos) {
+                
+                // Do nothing if the iterator ended already
+                if (ended) {
+                    return null;
+                }
+
+                // Search for a cached segment
+                const [ res ] = this._cachedTree.search(pos, pos);
+                if (res) {
+                    const [ newIndex, seg ] = res;
+                    i = newIndex + 1;
+                    return seg;
+                }
+
+                // Advance the iterator until we reach the position `pos`
+                while (true) {
+                    const { done, value } = this._generator.next();
+                    if (done) {
+                        ended = true;
+                        return null;
+                    } else {
+
+                        // Cache the segment
+                        this._cachedSegments.push(value);
+                        this._cachedTree.insert(value.from, value.to, [ i, value ]);
+                        i++;
+
+                        // Stop if we reached the target position
+                        if (pos <= value.to) {
+                            return value;
+                        }
+                        
+                    }
+                }
+                
+            }.bind(this)            
+        };
     }
 }
+
+// When the contents of the file change, check if we need to invalidate the current format cache
+let currentFormatCache = null;
+file.on('change', (offset, len) => {
+    if (currentFormatCache && currentFormatCache._fileProxy.hasRead(offset, len)) {
+        currentFormatCache.invalidate();
+        log.debug('Format cache invalidated.');
+    }
+});
 
 export default {
 
@@ -122,7 +228,8 @@ export default {
             return;
         }
 
-        __hedit.file_setFormat(new FormatCache(f));
+        currentFormatCache = new FormatCache(f);
+        __hedit.file_setFormat(currentFormatCache);
     }
 
 };

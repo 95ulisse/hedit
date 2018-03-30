@@ -86,6 +86,18 @@ bool hedit_file_iter_next(FileIterator*, const unsigned char** data, size_t* len
 /** Releases all the resources held by the given iterator. */
 void hedit_file_iter_free(FileIterator*);
 
+/**
+ * Registers a callback that will be fired whenever the contents of this file change.
+ * Returns a token that can be used to deregister the handler.
+ */
+void* hedit_file_on_change(File*, void (*handler)(void* user, File*, size_t offset, size_t len), void* user);
+
+/**
+ * Unregisters a callback for the change event.
+ * The `token` argument is the return value of the call to `hedit_file_on_change`.
+ */
+void hedit_file_on_change_remove(File*, void* token);
+
 
 #ifdef __cplusplus
 }

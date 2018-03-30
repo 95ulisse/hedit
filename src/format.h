@@ -36,7 +36,7 @@ public:
         _obj.Reset();
     }
 
-    JsFormatIterator* Iterator(size_t from);
+    JsFormatIterator* Iterator();
 
 private:
     v8::Isolate* _isolate;
@@ -47,13 +47,15 @@ private:
 /** Simple iterator over the JS object held inside a JsFormat. */
 class JsFormatIterator {
 public:
-    JsFormatIterator(v8::Isolate* isolate, v8::Local<v8::Object> jsIterator, size_t from);
+    JsFormatIterator(v8::Isolate* isolate, v8::Local<v8::Object> jsIterator);
 
     ~JsFormatIterator() {
         _jsIterator.Reset();
         _nextFunction.Reset();
+        _seekFunction.Reset();
     }
 
+    FormatSegment* Seek(size_t pos);
     FormatSegment* Next();
     FormatSegment* Current();
 
@@ -61,13 +63,14 @@ private:
     v8::Isolate* _isolate;
     v8::Persistent<v8::Object> _jsIterator;
     v8::Persistent<v8::Function> _nextFunction;
+    v8::Persistent<v8::Function> _seekFunction;
     FormatSegment _current;
     char _currentName[MAX_SEGMENT_NAME_LEN];
     bool _initialized = false;
     bool _done = false;
-    size_t _from;
 
-    v8::MaybeLocal<v8::Object> AdvanceIterator();
+    bool AdvanceIterator();
+    void UnpackJsSegment(v8::Local<v8::Object> seg);
 };
 
 #endif
@@ -117,7 +120,10 @@ void hedit_format_guess(HEdit* hedit);
 void hedit_format_free(Format* format);
 
 /** Starts a new iterator from the segment including the `from` byte. */
-FormatIterator* hedit_format_iter(Format* format, size_t from);
+FormatIterator* hedit_format_iter(Format* format);
+
+/** Advances the iterator up to `pos` bytes. */
+FormatSegment* hedit_format_iter_seek(FormatIterator* it, size_t pos);
 
 /** Returns the current segment without advancing the iterator. */
 FormatSegment* hedit_format_iter_current(FormatIterator* it);

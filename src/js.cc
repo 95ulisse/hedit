@@ -157,7 +157,6 @@ static void NativeEventHandlerModeSwitch(void* user, HEdit* hedit, Mode* newmode
     InvokeBrokers(2, args);
 }
 
-
 static void NativeEventHandlerViewSwitch(void* user, HEdit* hedit, View* newview, View* oldview) {
  
     // Enter JS
@@ -170,6 +169,24 @@ static void NativeEventHandlerViewSwitch(void* user, HEdit* hedit, View* newview
     Local<v8::Value> args[] = { event_name, view_name };
 
     InvokeBrokers(2, args);
+}
+
+static void NativeFileChangeHandler(void* user, File* file, size_t offset, size_t len) {
+ 
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
+    Local<Integer> o = Integer::NewFromUnsigned(isolate, (uint32_t) offset);
+    Local<Integer> l = Integer::NewFromUnsigned(isolate, (uint32_t) len);
+    Local<v8::Value> args[] = { v8_str("file_change"), o, l };
+
+    InvokeBrokers(3, args);
+}
+
+static void NativeFileOpenHandler(void* user, HEdit* hedit, File* file) {
+    hedit_file_on_change(file, NativeFileChangeHandler, NULL);
 }
 
 
@@ -1057,7 +1074,12 @@ bool hedit_js_init(HEdit* hedit) {
         native_event_registrations.push_back(token); \
     } while (false);
 
+        // Register an handler for the file open event
+        // so that we can register to the file-specific events too
+        REG(file_open, NativeFileOpenHandler);
+
         // Register an handler for all the native events
+        // to delegate them to JS side.
         REG(load,               NativeEventHandler0);
         REG(quit,               NativeEventHandler0);
         REG(mode_switch,        NativeEventHandlerModeSwitch);
@@ -1139,14 +1161,25 @@ void hedit_format_free(Format* format) {
     delete format;
 }
 
-FormatIterator* hedit_format_iter(Format* format, size_t from) {
+FormatIterator* hedit_format_iter(Format* format) {
     
     // Enter JS
     Isolate::Scope isolate_scope(isolate);
     HandleScope handle_scope(isolate);
     Context::Scope context_scope(user_context.Get(isolate));
 
-    return format->Iterator(from);
+    return format->Iterator();
+
+}
+
+FormatSegment* hedit_format_iter_seek(FormatIterator* it, size_t pos) {
+
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
+    return it->Seek(pos);
 
 }
 
@@ -1176,7 +1209,7 @@ void hedit_format_iter_free(FormatIterator* it) {
     delete it;
 }
 
-JsFormatIterator* JsFormat::Iterator(size_t from) {
+JsFormatIterator* JsFormat::Iterator() {
     HandleScope handle_scope(_isolate);
 
     Local<Context> ctx = _ctx.Get(_isolate);
@@ -1208,13 +1241,12 @@ JsFormatIterator* JsFormat::Iterator(size_t from) {
         return NULL;
     }
 
-    return new JsFormatIterator(_isolate, Local<Object>::Cast(iterator), from);
+    return new JsFormatIterator(_isolate, Local<Object>::Cast(iterator));
 }
 
-JsFormatIterator::JsFormatIterator(Isolate* isolate, Local<Object> jsIterator, size_t from)
+JsFormatIterator::JsFormatIterator(Isolate* isolate, Local<Object> jsIterator)
         : _isolate(isolate),
-          _jsIterator(isolate, jsIterator),
-          _from(from)
+          _jsIterator(isolate, jsIterator)
 {
     _current.name = (const char*) &_currentName;
 
@@ -1224,9 +1256,28 @@ JsFormatIterator::JsFormatIterator(Isolate* isolate, Local<Object> jsIterator, s
     // Cache the `next` function
     Local<v8::Value> nextFunction = jsIterator->Get(ctx, v8_str("next")).ToLocalChecked();
     _nextFunction.Reset(_isolate, Local<Function>::Cast(nextFunction));
+
+    // Cache the `seek` function
+    Local<v8::Value> seekFunction = jsIterator->Get(ctx, v8_str("seek")).ToLocalChecked();
+    _seekFunction.Reset(_isolate, Local<Function>::Cast(seekFunction));
 }
 
-MaybeLocal<Object> JsFormatIterator::AdvanceIterator() {
+void JsFormatIterator::UnpackJsSegment(Local<Object> seg) {
+    EscapableHandleScope handle_scope(_isolate);
+    Local<Context> ctx = _isolate->GetCurrentContext();
+    
+    // Start unpacking the other properties of the JS object in the native structure
+    String::Utf8Value name(isolate, seg->Get(ctx, v8_str("name")).ToLocalChecked());
+    strncpy((char*) &_currentName, *name, MAX_SEGMENT_NAME_LEN);
+    _currentName[MAX_SEGMENT_NAME_LEN - 1] = '\0';
+    _current.from = (size_t) seg->Get(ctx, v8_str("from")).ToLocalChecked()->IntegerValue(ctx).FromJust();
+    _current.to = (size_t) seg->Get(ctx, v8_str("to")).ToLocalChecked()->IntegerValue(ctx).FromJust();
+    _current.color = (int) seg->Get(ctx, v8_str("color")).ToLocalChecked()->IntegerValue(ctx).FromJust();
+
+    _initialized = true;
+}
+
+bool JsFormatIterator::AdvanceIterator() {
     EscapableHandleScope handle_scope(_isolate);
     Local<Context> ctx = _isolate->GetCurrentContext();
 
@@ -1240,11 +1291,11 @@ MaybeLocal<Object> JsFormatIterator::AdvanceIterator() {
         Local<v8::Value> ex = tt.Exception();
         String::Utf8Value str(isolate, ex);
         log_fatal("Invalid iterator: %s", c_str(str));
-        return MaybeLocal<Object>();
+        return false;
     }
     if (!res->IsObject()) {
         log_fatal("Invalid iterator.");
-        return MaybeLocal<Object>();
+        return false;
     }
 
     // The returned object has two properties: `value` and `done`
@@ -1253,11 +1304,50 @@ MaybeLocal<Object> JsFormatIterator::AdvanceIterator() {
     bool done = resobj->Get(ctx, v8_str("done")).ToLocalChecked()->BooleanValue(ctx).FromJust();
     if (done) {
         _done = true;
-        return MaybeLocal<Object>();
+        return false;
     }
 
     Local<v8::Value> val = resobj->Get(ctx, v8_str("value")).ToLocalChecked();
-    return MaybeLocal<Object>(handle_scope.Escape(Local<Object>::Cast(val)));
+    UnpackJsSegment(Local<Object>::Cast(val));
+    
+    return true;
+}
+
+FormatSegment* JsFormatIterator::Seek(size_t pos) {
+
+    // Return NULL if we reached the end
+    if (_done) {
+        return NULL;
+    }
+
+    HandleScope handle_scope(_isolate);
+    Local<Context> ctx = _isolate->GetCurrentContext();
+    
+    Local<Object> iterator = _jsIterator.Get(_isolate);
+    Local<Function> seekFunction = _seekFunction.Get(_isolate);
+    Local<v8::Value> args[] = {
+        Integer::NewFromUnsigned(_isolate, (uint32_t) pos)
+    };
+    
+    // Call the `seek()` method of the JS iterator
+    TryCatch tt;
+    Local<v8::Value> res;
+    if (!seekFunction->Call(ctx, iterator, 1, args).ToLocal(&res)) {
+        Local<v8::Value> ex = tt.Exception();
+        String::Utf8Value str(isolate, ex);
+        log_fatal("Invalid iterator: %s", c_str(str));
+        return NULL;
+    }
+
+    // The `seek()` method is expected to return a js segment, or null
+    if (res->IsNull()) {
+        _done = true;
+        return NULL;
+    }
+    UnpackJsSegment(Local<Object>::Cast(res));
+
+    return &_current;
+    
 }
 
 FormatSegment* JsFormatIterator::Next() {
@@ -1267,33 +1357,8 @@ FormatSegment* JsFormatIterator::Next() {
         return NULL;
     }
 
-    HandleScope handle_scope(_isolate);
-    Local<Context> ctx = _isolate->GetCurrentContext();
-
-again:
     // Advance the JS iterator
-    Local<Object> seg;
-    if (!AdvanceIterator().ToLocal(&seg)) {
-        // Finished!
-        return NULL;
-    }
-
-    // We have a starting offset to start iterating from,
-    // so discard all the segments before that offset
-    _current.to = (size_t) seg->Get(ctx, v8_str("to")).ToLocalChecked()->IntegerValue(ctx).FromJust();
-    if (_current.to < _from) {
-        goto again;
-    }
-
-    // Start unpacking the other properties of the JS object in the native structure
-    String::Utf8Value name(isolate, seg->Get(ctx, v8_str("name")).ToLocalChecked());
-    strncpy((char*) &_currentName, *name, MAX_SEGMENT_NAME_LEN);
-    _currentName[MAX_SEGMENT_NAME_LEN - 1] = '\0';
-    _current.from = (size_t) seg->Get(ctx, v8_str("from")).ToLocalChecked()->IntegerValue(ctx).FromJust();
-    _current.color = (int) seg->Get(ctx, v8_str("color")).ToLocalChecked()->IntegerValue(ctx).FromJust();
-
-    _initialized = true;
-    return &_current;
+    return this->AdvanceIterator() ? &_current : NULL;
 
 }
 

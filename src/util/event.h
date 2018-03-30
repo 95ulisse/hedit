@@ -23,6 +23,7 @@ struct __event_handler {
 #define event_add(ev, f, user) __event_add((ev), (EventHandler)(f), (user)) 
 void* __event_add(Event* ev, EventHandler f, void* user);
 void event_del(void* token);
+void event_free(Event* ev);
 
 #define event_fire(ev, ...) \
     list_for_each_member(h, ev, struct __event_handler, list) { \

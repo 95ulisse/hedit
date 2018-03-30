@@ -15,6 +15,7 @@
 #include "util/log.h"
 #include "util/common.h"
 #include "util/list.h"
+#include "util/event.h"
 
 /**
  * This is an implementation of a piece chain.
@@ -155,6 +156,8 @@ struct File {
 
     Revision* current_revision; // Pointer to the current active revision
     struct list_head pending_changes; // Changes not yet attached to a revision
+
+    Event ev_change;
 };
 
 struct FileIterator {
@@ -511,6 +514,7 @@ File* hedit_file_open(const char* path) {
     list_init(&file->all_pieces);
     list_init(&file->pieces);
     list_init(&file->pending_changes);
+    event_init(&file->ev_change);
 
     if (path == NULL) {
 
@@ -639,6 +643,8 @@ void hedit_file_close(File* file) {
     }
 
     log_debug("Closing file: %s.", file->name);
+
+    event_free(&file->ev_change);
 
     hedit_file_commit_revision(file); // Commits any pending change
 
@@ -947,12 +953,12 @@ bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, siz
     // If we are inserting at the beginning of a piece, check if the previous one was cached and try using it
     if (piece != NULL) {
         if (cache_insert(file, piece, piece_offset, data, len)) {
-            return true;
+            goto success;
         }
         if (piece_offset == 0 && list_first(&file->pieces, Piece, list) != piece) {
             Piece* prev = list_prev(piece, Piece, list);
             if (cache_insert(file, prev, prev->size, data, len)) {
-                return true;
+                goto success;
             }
         }
     }
@@ -1060,7 +1066,15 @@ bool hedit_file_insert(File* file, size_t offset, const unsigned char* data, siz
     // Apply the prepared change
     cache_put(file, new);
     span_swap(file, &change->original, &change->replacement);
+
+success:
+
+    // Mark the file as dirty
     file->dirty = true;
+    
+    // Notify about the change
+    event_fire(&file->ev_change, file, offset, file->size - len - offset);
+    
     return true;
 
 }
@@ -1095,7 +1109,7 @@ bool hedit_file_delete(File* file, size_t offset, size_t len) {
 
     // First try with the cached piece
     if (cache_delete(file, start_piece, start_piece_offset, len)) {
-        return true;
+        goto success;
     }
 
     // Deletion range can both start and end up in the middle of a piece.
@@ -1151,7 +1165,14 @@ bool hedit_file_delete(File* file, size_t offset, size_t len) {
     span_init(&change->replacement, new_start, new_end);
     span_swap(file, &change->original, &change->replacement);
 
+success:
+
+    // Mark the file as dirty
     file->dirty = true;
+
+    // Notify about the change
+    event_fire(&file->ev_change, file, offset, file->size + len - offset);
+    
     return true;
 
 }
@@ -1200,12 +1221,20 @@ bool hedit_file_undo(File* file, size_t* pos) {
         return false;
     }
 
+    size_t previous_size = file->size;
+    size_t first_pos = file->size;
+    
     // Revert all the changes in the last revision
     list_for_each_rev_member(c, &file->current_revision->changes, Change, list) {
         span_swap(file, &c->replacement, &c->original);
         *pos = c->pos;
+        first_pos = MIN(first_pos, c->pos);
     }
     file->current_revision = list_prev(file->current_revision, Revision, list);
+
+    // Notify about the file change
+    event_fire(&file->ev_change, file, first_pos, previous_size - first_pos);
+    
     return true;
 
 }
@@ -1222,13 +1251,21 @@ bool hedit_file_redo(File* file, size_t* pos) {
         return false;
     }
 
+    size_t previous_size = file->size;
+    size_t first_pos = file->size;
+    
     // Reapply the changes in the revision
     Revision* rev = list_next(file->current_revision, Revision, list);
     list_for_each_member(c, &rev->changes, Change, list) {
         span_swap(file, &c->original, &c->replacement);
         *pos = c->pos;
+        first_pos = MIN(first_pos, c->pos);
     }
     file->current_revision = rev;
+    
+    // Notify about the file change
+    event_fire(&file->ev_change, file, first_pos, previous_size - first_pos);
+    
     return true;
 
 }
@@ -1322,4 +1359,12 @@ bool hedit_file_iter_next(FileIterator* it, const unsigned char** data, size_t* 
 
 void hedit_file_iter_free(FileIterator* it) {
     free(it);
+}
+
+void* hedit_file_on_change(File* file, void (*handler)(void*, File*, size_t, size_t), void* user) {
+    return event_add(&file->ev_change, handler, user);
+}
+
+void hedit_file_on_change_remove(File* file, void* token) {
+    event_del(token);
 }

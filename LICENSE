@@ -23,6 +23,12 @@ Portions of this software are derived from third-party works:
 - src/js/private/eventemitter.js: Taken from EventEmitter3, licensed under the MIT license.
   https://github.com/primus/eventemitter3
 
+- src/js/private/intervaltree.js: Interval tree implementation by Marko Žarković, released under the MIT license.
+  https://github.com/ShieldBattery/node-interval-tree
+
+- src/js/private/shallowequal.js: Taken from the package `shallowequal` by Alberto Leal, released under the MIT license.
+  https://github.com/dashed/shallowequal
+
 - scripts/rjsmin.py: fast JS minifier in Python by André Malo, licensed under the Apache 2 license.
   https://github.com/ndparker/rjsmin
 

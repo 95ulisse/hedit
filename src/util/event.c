@@ -30,3 +30,10 @@ void event_del(void* token) {
     free(handler);
 
 }
+
+void event_free(Event* ev) {
+    list_for_each_member(h, ev, struct __event_handler, list) {
+        list_del(&h->list);
+        free(h);
+    }
+}

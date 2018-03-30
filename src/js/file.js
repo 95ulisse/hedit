@@ -147,4 +147,11 @@ __hedit.registerEventBroker((name, ...args) => {
  * @event close
  */
 
+/**
+ * Event raised when the contents of the file change.
+ * @event change
+ * @param {integer} offset - Offset of the change.
+ * @param {integer} len - Length of the change.
+ */
+
 export default file;
