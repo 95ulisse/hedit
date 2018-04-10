@@ -15,7 +15,10 @@
 #include "util/log.h"
 #include "util/common.h"
 #include "util/list.h"
-#include "util/event.h"
+
+// TODO: This is horrible.
+#include "core.h"
+#include "util/pubsub.h"
 
 /**
  * This is an implementation of a piece chain.
@@ -156,8 +159,6 @@ struct File {
 
     Revision* current_revision; // Pointer to the current active revision
     struct list_head pending_changes; // Changes not yet attached to a revision
-
-    Event ev_change;
 };
 
 struct FileIterator {
@@ -500,6 +501,22 @@ static bool revision_purge(File* file) {
     return true;
 }
 
+static void publish_change(File* file, size_t offset, size_t len) {
+    // This event should not be here, this is just a quick fix.
+    // This needs to be refactored as soon as possible.
+
+    HEditFileChangeEvent ev = {
+        .e = {
+            .hedit = NULL, // TODO: Seriously, this hurts so bad.
+            .type = HEDIT_EVENT_TYPE_FILE_CHANGE
+        },
+        .file = file,
+        .offset = offset,
+        .len = len
+    };
+    pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_FILE_CHANGE, &ev);
+}
+
 File* hedit_file_open(const char* path) {
 
     // Initialize a new File structure
@@ -513,7 +530,6 @@ File* hedit_file_open(const char* path) {
     list_init(&file->all_pieces);
     list_init(&file->pieces);
     list_init(&file->pending_changes);
-    event_init(&file->ev_change);
 
     if (path == NULL) {
 
@@ -642,8 +658,6 @@ void hedit_file_close(File* file) {
     }
 
     log_debug("Closing file: %s.", file->name);
-
-    event_free(&file->ev_change);
 
     hedit_file_commit_revision(file); // Commits any pending change
 
@@ -1072,7 +1086,7 @@ success:
     file->dirty = true;
     
     // Notify about the change
-    event_fire(&file->ev_change, file, offset, file->size - len - offset);
+    publish_change(file, offset, file->size - len - offset);
     
     return true;
 
@@ -1170,7 +1184,7 @@ success:
     file->dirty = true;
 
     // Notify about the change
-    event_fire(&file->ev_change, file, offset, file->size + len - offset);
+    publish_change(file, offset, file->size + len - offset);
     
     return true;
 
@@ -1232,7 +1246,7 @@ bool hedit_file_undo(File* file, size_t* pos) {
     file->current_revision = list_prev(file->current_revision, Revision, list);
 
     // Notify about the file change
-    event_fire(&file->ev_change, file, first_pos, previous_size - first_pos);
+    publish_change(file, first_pos, previous_size - first_pos);
     
     return true;
 
@@ -1263,7 +1277,7 @@ bool hedit_file_redo(File* file, size_t* pos) {
     file->current_revision = rev;
     
     // Notify about the file change
-    event_fire(&file->ev_change, file, first_pos, previous_size - first_pos);
+    publish_change(file, first_pos, previous_size - first_pos);
     
     return true;
 
@@ -1355,12 +1369,4 @@ bool hedit_file_iter_next(FileIterator* it, const unsigned char** data, size_t* 
 
 void hedit_file_iter_free(FileIterator* it) {
     free(it);
-}
-
-void* hedit_file_on_change(File* file, void (*handler)(void*, File*, size_t, size_t), void* user) {
-    return event_add(&file->ev_change, handler, user);
-}
-
-void hedit_file_on_change_remove(File* file, void* token) {
-    event_del(token);
 }

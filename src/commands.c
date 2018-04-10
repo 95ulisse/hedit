@@ -8,7 +8,7 @@
 #include "format.h"
 #include "util/log.h"
 #include "util/map.h"
-#include "util/event.h"
+#include "util/pubsub.h"
 
 
 struct ArgIterator {
@@ -58,13 +58,28 @@ static bool edit(HEdit* hedit, bool force, ArgIterator* args, void* user) {
     }
 
     if (hedit->file != NULL) {
-        event_fire(&hedit->ev_file_close, hedit, hedit->file);
+        HEditFileEvent ev = {
+            .e = {
+                .hedit = hedit,
+                .type = HEDIT_EVENT_TYPE_FILE_CLOSE
+            },
+            .file = hedit->file
+        };
+        pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_FILE_CLOSE, &ev);
         hedit_file_close(hedit->file);
     }
 
     hedit->file = f;
     hedit_format_guess(hedit);
-    event_fire(&hedit->ev_file_open, hedit, hedit->file);
+    
+    HEditFileEvent ev = {
+        .e = {
+            .hedit = hedit,
+            .type = HEDIT_EVENT_TYPE_FILE_OPEN
+        },
+        .file = hedit->file
+    };
+    pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_FILE_OPEN, &ev);
 
     hedit_switch_view(hedit, HEDIT_VIEW_EDIT);
 
@@ -85,13 +100,28 @@ static bool new(HEdit* hedit, bool force, ArgIterator* args, void* user) {
 
     // Close the exiting file (if any)
     if (hedit->file != NULL) {
-        event_fire(&hedit->ev_file_close, hedit, hedit->file);
+        HEditFileEvent ev = {
+            .e = {
+                .hedit = hedit,
+                .type = HEDIT_EVENT_TYPE_FILE_CLOSE
+            },
+            .file = hedit->file
+        };
+        pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_FILE_CLOSE, &ev);
         hedit_file_close(hedit->file);
     }
 
     hedit->file = f;
     hedit_format_guess(hedit);
-    event_fire(&hedit->ev_file_open, hedit, hedit->file);
+    
+    HEditFileEvent ev = {
+        .e = {
+            .hedit = hedit,
+            .type = HEDIT_EVENT_TYPE_FILE_OPEN
+        },
+        .file = hedit->file
+    };
+    pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_FILE_OPEN, &ev);
 
     hedit_switch_view(hedit, HEDIT_VIEW_EDIT);
 
@@ -110,7 +140,14 @@ static bool close(HEdit* hedit, bool force, ArgIterator* args, void* user) {
         return false;
     }
 
-    event_fire(&hedit->ev_file_close, hedit, hedit->file);
+    HEditFileEvent ev = {
+        .e = {
+            .hedit = hedit,
+            .type = HEDIT_EVENT_TYPE_FILE_CLOSE
+        },
+        .file = hedit->file
+    };
+    pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_FILE_CLOSE, &ev);
 
     hedit_file_close(hedit->file);
     hedit->file = NULL;
@@ -138,11 +175,17 @@ static bool write(HEdit* hedit, bool force, ArgIterator* args, void* user) {
         log_error("Missing file name.");
         return false;
     }
-
-    event_fire(&hedit->ev_file_before_write, hedit, hedit->file);
+    
     bool res = hedit_file_save(hedit->file, name, SAVE_MODE_AUTO);
     if (res) {
-        event_fire(&hedit->ev_file_write, hedit, hedit->file);
+        HEditFileEvent ev = {
+            .e = {
+                .hedit = hedit,
+                .type = HEDIT_EVENT_TYPE_FILE_WRITE
+            },
+            .file = hedit->file
+        };
+        pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_FILE_WRITE, &ev);
     }
 
     return res;

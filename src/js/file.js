@@ -3,9 +3,7 @@
  * @module hedit/file
  */
 
-import EventEmitter from 'hedit/private/eventemitter';
-
-class File extends EventEmitter {
+export default {
 
     /**
      * Returns a boolean indicating whether a file is currently open or not.
@@ -15,7 +13,7 @@ class File extends EventEmitter {
      */
     get isOpen() {
         return __hedit.file_isOpen();
-    }
+    },
 
     /**
      * Returns the name of the currently open file, or `null` if no file is open.
@@ -25,7 +23,7 @@ class File extends EventEmitter {
      */
     get name() {
         return this.isOpen ? __hedit.file_name() : null;
-    }
+    },
 
     /**
      * Returns the size in bytes of the currently open file, or `-1` if no file is open.
@@ -35,7 +33,7 @@ class File extends EventEmitter {
      */
     get size() {
         return this.isOpen ? __hedit.file_size() : -1;
-    }
+    },
 
     /**
      * Returns a value indicating whether any modification to the file has been done
@@ -46,7 +44,7 @@ class File extends EventEmitter {
      */
     get isDirty() {
         return this.isOpen && __hedit.file_isDirty();
-    }
+    },
 
     /**
      * Reverts the last change applied to the currently open file.
@@ -55,7 +53,7 @@ class File extends EventEmitter {
      */
     undo() {
         return this.isOpen && __hedit.file_undo();
-    }
+    },
 
     /**
      * Reapplies the last undone change to the currently open file.
@@ -64,7 +62,7 @@ class File extends EventEmitter {
      */
     redo() {
         return this.isOpen && __hedit.file_redo();
-    }
+    },
 
     /**
      * Commits a new revision to the currently open file.
@@ -78,7 +76,7 @@ class File extends EventEmitter {
      */
     commit() {
         return this.isOpen && __hedit.file_commit();
-    }
+    },
 
     /**
      * Inserts new data into the currently open file.
@@ -89,7 +87,7 @@ class File extends EventEmitter {
      */
     insert(pos, data) {
         return this.isOpen && __hedit.file_insert(0 + pos, data);
-    }
+    },
 
     /**
      * Deletes a portion of the currently open file.
@@ -100,7 +98,7 @@ class File extends EventEmitter {
      */
     delete(pos, len) {
         return this.isOpen && __hedit.file_delete(0 + pos, 0 + len);
-    }
+    },
 
     /**
      * Reads a portion of the currently open file.
@@ -118,40 +116,3 @@ class File extends EventEmitter {
     }
 
 };
-
-const file = new File();
-
-__hedit.registerEventBroker((name, ...args) => {
-    if (name.indexOf('file_') == 0) {
-        file.emit(name.substring(5).replace(/_([a-z])/g, m => m[1].toUpperCase()), ...args);
-    }
-});
-
-/**
- * Event raised when a new file is opened by the user.
- * @event open
- */
-
-/**
- * Event raised just before trying to the save the file to disk.
- * @event beforeWrite
- */
-
-/**
- * Event raised when the file has been successfully written to disk.
- * @event write
- */
-
-/**
- * Event raised when the open file is closed.
- * @event close
- */
-
-/**
- * Event raised when the contents of the file change.
- * @event change
- * @param {integer} offset - Offset of the change.
- * @param {integer} len - Length of the change.
- */
-
-export default file;

@@ -7,7 +7,7 @@
 #include "core.h"
 #include "statusbar.h"
 #include "util/log.h"
-#include "util/event.h"
+#include "util/pubsub.h"
 
 #define MAX_MESSAGE_LEN 512
 
@@ -21,10 +21,7 @@ struct Statusbar {
 
     // Registrations
     int on_resize_bind_id;
-    void* on_mode_switch_registration;
-    void* on_file_open_registration;
-    void* on_file_write_registration;
-    void* on_file_close_registration;
+    Subscription* subscription;
     void* log_sink_registration;
 };
 
@@ -183,21 +180,20 @@ static int on_resize(TickitWindow* win, TickitEventFlags flags, void* info, void
     
 }
 
-static void on_mode_switch(void* user, HEdit* hedit, Mode* new, Mode* old) {
+static void on_pubsub(PubSub* pubsub, const char* topic, void* data, void* user) {
     Statusbar* statusbar = user;
+    HEditEvent* ev = data;
 
-    // Hide the last error
-    if (!statusbar->last_message_is_sticky) {
-        statusbar->show_last_message = false;
+    // Hide the last error if we changed mode
+    if (ev->type == HEDIT_EVENT_TYPE_MODE_SWITCH) {
+        if (!statusbar->last_message_is_sticky) {
+            statusbar->show_last_message = false;
+        }
     }
 
     // Force a redraw of the first line
     redraw_first_line(statusbar);
-}
 
-static void on_file_event(void* user, HEdit* hedit, File* file) {
-    Statusbar* statusbar = user;
-    redraw_first_line(statusbar);
 }
 
 static void on_log_message(void* user, struct log_config* config, const char* file, int line, log_severity severity, const char* format, va_list args) {
@@ -249,10 +245,12 @@ Statusbar* hedit_statusbar_init(HEdit* hedit) {
     // Register the event handlers
     tickit_window_bind_event(statusbar->win, TICKIT_WINDOW_ON_EXPOSE, 0, on_expose, statusbar);
     statusbar->on_resize_bind_id = tickit_window_bind_event(hedit->rootwin, TICKIT_WINDOW_ON_GEOMCHANGE, 0, on_resize, statusbar);
-    statusbar->on_mode_switch_registration = event_add(&hedit->ev_mode_switch, on_mode_switch, statusbar);
-    statusbar->on_file_open_registration = event_add(&hedit->ev_file_open, on_file_event, statusbar);
-    statusbar->on_file_write_registration = event_add(&hedit->ev_file_write, on_file_event, statusbar);
-    statusbar->on_file_close_registration = event_add(&hedit->ev_file_close, on_file_event, statusbar);
+    statusbar->subscription = pubsub_register(
+        pubsub_default(),
+        HEDIT_EVENT_TOPIC_MODE_SWITCH "," HEDIT_EVENT_TOPIC_FILE_OPEN "," HEDIT_EVENT_TOPIC_FILE_WRITE "," HEDIT_EVENT_TOPIC_FILE_CLOSE,
+        on_pubsub,
+        statusbar
+    );
     statusbar->log_sink_registration = log_register_sink(on_log_message, statusbar);
 
     return statusbar;
@@ -266,10 +264,7 @@ void hedit_statusbar_teardown(Statusbar* statusbar) {
 
     // Detach handlers
     tickit_window_unbind_event_id(statusbar->hedit->rootwin, statusbar->on_resize_bind_id);
-    event_del(statusbar->on_mode_switch_registration);
-    event_del(statusbar->on_file_open_registration);
-    event_del(statusbar->on_file_write_registration);
-    event_del(statusbar->on_file_close_registration);
+    pubsub_unregister(statusbar->subscription);
     log_unregister_sink(statusbar->log_sink_registration);
 
     // Destroy the window and free the memory

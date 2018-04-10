@@ -15,6 +15,7 @@
 #include "util/log.h"
 #include "util/map.h"
 #include "util/buffer.h"
+#include "util/pubsub.h"
 
 
 static bool mode_command_on_enter(HEdit* hedit, Mode* prev) {
@@ -163,7 +164,15 @@ void hedit_switch_mode(HEdit* hedit, enum Modes m) {
     }
 
     // Fire the event
-    event_fire(&hedit->ev_mode_switch, hedit, new, old);
+    HEditModeEvent ev = {
+        .e = {
+            .hedit = hedit,
+            .type = HEDIT_EVENT_TYPE_MODE_SWITCH
+        },
+        .old_mode = old,
+        .new_mode = new
+    };
+    pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_MODE_SWITCH, &ev);
 }
 
 
@@ -210,8 +219,15 @@ void hedit_switch_view(HEdit* hedit, enum Views v) {
     }
 
     // Fire the event
-    log_debug("View switch: %s -> %s", old == NULL ? NULL : old->name, new->name);
-    event_fire(&hedit->ev_view_switch, hedit, new, old);
+    HEditViewEvent ev = {
+        .e = {
+            .hedit = hedit,
+            .type = HEDIT_EVENT_TYPE_VIEW_SWITCH
+        },
+        .old_view = old,
+        .new_view = new
+    };
+    pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_VIEW_SWITCH, &ev);
 
     tickit_window_expose(hedit->viewwin, NULL);
 }
@@ -790,15 +806,7 @@ HEdit* hedit_core_init(Options* cli_options, Tickit* tickit) {
     hedit->tickit = tickit;
     hedit->rootwin = tickit_get_rootwin(tickit);
     hedit->exit = false;
-    event_init(&hedit->ev_load);
-    event_init(&hedit->ev_quit);
-    event_init(&hedit->ev_mode_switch);
-    event_init(&hedit->ev_view_switch);
-    event_init(&hedit->ev_file_open);
-    event_init(&hedit->ev_file_before_write);
-    event_init(&hedit->ev_file_write);
-    event_init(&hedit->ev_file_close);
-
+    
     // Initialize default builtin options
     if (!init_builtin_options(hedit)) {
         goto error;

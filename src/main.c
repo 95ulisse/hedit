@@ -13,7 +13,7 @@
 #include "options.h"
 #include "js.h"
 #include "util/log.h"
-#include "util/event.h"
+#include "util/pubsub.h"
 
 static sigjmp_buf sigint_jmpbuf;
 
@@ -54,7 +54,12 @@ static int on_tickit_ready(Tickit *t, TickitEventFlags flags, void *user) {
         hedit_emit_keys(hedit, "<Enter>");
     }
 
-    event_fire(&hedit->ev_load, hedit);
+    // Fire the load event
+    HEditEvent ev = {
+        .hedit = hedit,
+        .type = HEDIT_EVENT_TYPE_LOAD
+    };
+    pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_LOAD, &ev);
     return 1;
 }
 
@@ -116,7 +121,11 @@ int main(int argc, char** argv) {
     tickit_run(tickit);
 
     // Fire the quit event
-    event_fire(&hedit->ev_quit, hedit);
+    HEditEvent ev = {
+        .hedit = hedit,
+        .type = HEDIT_EVENT_TYPE_QUIT
+    };
+    pubsub_publish(pubsub_default(), HEDIT_EVENT_TOPIC_QUIT, &ev);
 
     // Tear down everything
     int exitcode = hedit->exitcode;

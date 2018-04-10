@@ -14,6 +14,7 @@
 #include "js.h"
 #include "commands.h"
 #include "util/log.h"
+#include "util/pubsub.h"
 
 using namespace v8;
 
@@ -28,11 +29,9 @@ static Persistent<Context> builtin_context;
 static Persistent<Context> user_context;
 
 // Event registrations.
-// In `native_event_registrations` we store the registrations to the native events
-// on the `HEdit` instance, and then, when any of these events fire, we notify all the
-// registered JS functions in `event_brokers`.
-static std::vector<void*> native_event_registrations;
-static std::vector<Global<Function>> event_brokers;
+// We register a single global event handler to forward all the events to the js side.
+static Subscription* native_pubsub_subscription;
+static Global<Function> js_event_broker;
 
 // JS function to guess the format of a file.
 // All the file format implementation is pushed to the JS side.
@@ -118,75 +117,60 @@ static inline const char* c_str(String::Utf8Value& str) {
     return *str != NULL ? *str : "<string conversion failed>";
 }
 
-static void InvokeBrokers(int argc, Local<v8::Value> args[]) {
-    TryCatch tt;
-    for (auto& broker : event_brokers) {
-        if (broker.Get(isolate)->Call(user_context.Get(isolate), Null(isolate), argc, args).IsEmpty()) {
-            Local<v8::Value> ex = tt.Exception();
-            String::Utf8Value str(isolate, ex);
-            log_error("Exception during JS event callback: %s", c_str(str));
+static void NativePubSubHandler(PubSub* pubsub, const char* topic, void* data, void* user) {
+    HEditEvent* ev = static_cast<HEditEvent*>(data);
+
+    // Enter JS
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
+    Context::Scope context_scope(user_context.Get(isolate));
+
+    int argc;
+    Local<v8::Value> argv[3];
+
+    // Some events carry extra data that we may still want to pass to JS
+    switch (ev->type) {
+        
+        case HEDIT_EVENT_TYPE_MODE_SWITCH: {
+            HEditModeEvent* ev2 = reinterpret_cast<HEditModeEvent*>(ev);
+            argc = 2;
+            argv[0] = v8_str(topic);
+            argv[1] = v8_str(ev2->new_mode->name);
+            break;
         }
+        
+        case HEDIT_EVENT_TYPE_VIEW_SWITCH: {
+            HEditViewEvent* ev2 = reinterpret_cast<HEditViewEvent*>(ev);
+            argc = 2;
+            argv[0] = v8_str(topic);
+            argv[1] = v8_str(ev2->new_view->name);
+            break;
+        }
+        
+        case HEDIT_EVENT_TYPE_FILE_CHANGE: {
+            HEditFileChangeEvent* ev2 = reinterpret_cast<HEditFileChangeEvent*>(ev);
+            argc = 3;
+            argv[0] = v8_str(topic);
+            argv[1] = Integer::NewFromUnsigned(isolate, (uint32_t) ev2->offset);
+            argv[2] = Integer::NewFromUnsigned(isolate, (uint32_t) ev2->len);
+            break;
+        }
+        
+        default:
+            argc = 1;
+            argv[0] = v8_str(topic);
+            break;
+            
     }
-}
 
-
-static void NativeEventHandler0(void* user, HEdit* hedit) {
+    // Invoke the JS broker
+    TryCatch tt;
+    if (js_event_broker.Get(isolate)->Call(user_context.Get(isolate), Null(isolate), argc, argv).IsEmpty()) {
+        Local<v8::Value> ex = tt.Exception();
+        String::Utf8Value str(isolate, ex);
+        log_error("Error during JS event dispatch: %s", c_str(str));
+    }
     
-    // Enter JS
-    Isolate::Scope isolate_scope(isolate);
-    HandleScope handle_scope(isolate);
-    Context::Scope context_scope(user_context.Get(isolate));
-
-    Local<String> event_name = v8_str((const char*) user);
-    Local<v8::Value> args[] = { event_name };
-
-    InvokeBrokers(1, args);
-}
-
-static void NativeEventHandlerModeSwitch(void* user, HEdit* hedit, Mode* newmode, Mode* oldmode) {
- 
-    // Enter JS
-    Isolate::Scope isolate_scope(isolate);
-    HandleScope handle_scope(isolate);
-    Context::Scope context_scope(user_context.Get(isolate));
-
-    Local<String> event_name = v8_str((const char*) user);
-    Local<String> mode_name = v8_str(newmode->name);
-    Local<v8::Value> args[] = { event_name, mode_name };
-
-    InvokeBrokers(2, args);
-}
-
-static void NativeEventHandlerViewSwitch(void* user, HEdit* hedit, View* newview, View* oldview) {
- 
-    // Enter JS
-    Isolate::Scope isolate_scope(isolate);
-    HandleScope handle_scope(isolate);
-    Context::Scope context_scope(user_context.Get(isolate));
-
-    Local<String> event_name = v8_str((const char*) user);
-    Local<String> view_name = v8_str(newview->name);
-    Local<v8::Value> args[] = { event_name, view_name };
-
-    InvokeBrokers(2, args);
-}
-
-static void NativeFileChangeHandler(void* user, File* file, size_t offset, size_t len) {
- 
-    // Enter JS
-    Isolate::Scope isolate_scope(isolate);
-    HandleScope handle_scope(isolate);
-    Context::Scope context_scope(user_context.Get(isolate));
-
-    Local<Integer> o = Integer::NewFromUnsigned(isolate, (uint32_t) offset);
-    Local<Integer> l = Integer::NewFromUnsigned(isolate, (uint32_t) len);
-    Local<v8::Value> args[] = { v8_str("file_change"), o, l };
-
-    InvokeBrokers(3, args);
-}
-
-static void NativeFileOpenHandler(void* user, HEdit* hedit, File* file) {
-    hedit_file_on_change(file, NativeFileChangeHandler, NULL);
 }
 
 
@@ -230,7 +214,7 @@ static void RegisterEventBroker(const FunctionCallbackInfo<v8::Value>& args) {
     assert(args[0]->IsFunction());
 
     Global<Function> f(isolate, Local<Function>::Cast(args[0]));
-    event_brokers.push_back(std::move(f));
+    js_event_broker = std::move(f);
 }
 
 // __hedit.registerFormatGuessFunction(f);
@@ -1064,30 +1048,12 @@ bool hedit_js_init(HEdit* hedit) {
         user_context.Reset(isolate, user_ctx);
         builtin_context.Reset(isolate, builtin_ctx);
 
-#define REG(name, handler) \
-    do {\
-        void* token = event_add(&hedit->ev_ ## name, handler, (void*) #name); \
-        if (token == NULL) { \
-            log_fatal("Cannot register handler for native event " #name); \
-            return false; \
-        } \
-        native_event_registrations.push_back(token); \
-    } while (false);
-
-        // Register an handler for the file open event
-        // so that we can register to the file-specific events too
-        REG(file_open, NativeFileOpenHandler);
-
-        // Register an handler for all the native events
-        // to delegate them to JS side.
-        REG(load,               NativeEventHandler0);
-        REG(quit,               NativeEventHandler0);
-        REG(mode_switch,        NativeEventHandlerModeSwitch);
-        REG(view_switch,        NativeEventHandlerViewSwitch);
-        REG(file_open,          NativeEventHandler0);
-        REG(file_before_write,  NativeEventHandler0);
-        REG(file_write,         NativeEventHandler0);
-        REG(file_close,         NativeEventHandler0);
+        // Register an interest for all the topics in the default pubsub context
+        native_pubsub_subscription = pubsub_register(pubsub_default(), "hedit/*", NativePubSubHandler, NULL);
+        if (native_pubsub_subscription == NULL) {
+            log_fatal("Cannot register native pubsub handler.");
+            return false;
+        }
 
         // Execute the builtin initializer
         if (!JsBuiltinModule::FromName("hedit/private/__init")->Eval(isolate)) {
@@ -1105,11 +1071,8 @@ void hedit_js_teardown(HEdit* hedit) {
     log_debug("V8 teardown.");
 
     // Remove event handlers and brokers
-    event_brokers.clear();
-    for (auto& token: native_event_registrations) {
-        event_del(token);
-    }
-    native_event_registrations.clear();
+    pubsub_unregister(native_pubsub_subscription);
+    js_event_broker.Reset();
     format_guess_function.Reset();
 
     // Dispose the contexts

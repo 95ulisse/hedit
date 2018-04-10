@@ -1,3 +1,10 @@
+/**
+ * Set of functions to define file formats.
+ * @module hedit/format
+ */
+
+import formatInternal from 'hedit/private/format';
+
 // Color names to integers map.
 const COLORS = {
     white: 0,
@@ -596,3 +603,28 @@ addCommonMethod('float64', 8, DataView.prototype.getFloat64, true );
 
 
 export { Format as default };
+
+
+/**
+ * Registers a new file format.
+ * @alias module:hedit/format.registerFormat
+ * @param {string} name - Name of the format. Must be unique.
+ * @param {object} [guess] - Hint for automatic selection of format on file open.
+ * @param {string} guess.extension - Use this format for the files matching this extension.
+ * @param {string} guess.magic - Use this format for the files starting with the given magic.
+ * @param {object} desc - Description of the file format.
+ * @throws Throws if the name of the format is not unique or if the format description
+ *         is invalid.
+ */
+export function registerFormat(name, guess, desc) {
+    if (typeof desc === 'undefined' && typeof guess === 'object') {
+        desc = guess;
+        guess = null;
+    }
+
+    if (!(desc instanceof Format)) {
+        throw new Error('Only Format objects can be registered.');
+    }
+    
+    formatInternal.registerFormat(name, guess, desc);
+}

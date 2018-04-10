@@ -12,7 +12,6 @@ typedef struct HEdit HEdit;
 #include "format.h"
 #include "util/common.h"
 #include "util/map.h"
-#include "util/event.h"
 #include "util/buffer.h"
 
 #ifdef __cplusplus
@@ -171,16 +170,6 @@ struct HEdit {
     Statusbar* statusbar;
     Buffer* command_buffer;
 
-    // Events                    // Handler signature
-    Event ev_load;               // void (*)(HEdit*);
-    Event ev_quit;               // void (*)(HEdit*);
-    Event ev_mode_switch;        // void (*)(HEdit*, Mode* new, Mode* old)
-    Event ev_view_switch;        // void (*)(HEdit*, View* new, View* old)
-    Event ev_file_open;          // void (*)(HEdit*, File*)
-    Event ev_file_before_write;  // void (*)(HEdit*, File*)
-    Event ev_file_write;         // void (*)(HEdit*, File*)
-    Event ev_file_close;         // void (*)(HEdit*, File*)
-
     // UI
     Tickit* tickit;
     TickitWindow* rootwin;
@@ -195,6 +184,69 @@ struct HEdit {
     int exitcode;
 
 };
+
+
+
+typedef enum HEditEventType {
+    HEDIT_EVENT_TYPE_LOAD,
+    HEDIT_EVENT_TYPE_QUIT,
+    HEDIT_EVENT_TYPE_MODE_SWITCH,
+    HEDIT_EVENT_TYPE_VIEW_SWITCH,
+    HEDIT_EVENT_TYPE_FILE_OPEN,
+    HEDIT_EVENT_TYPE_FILE_WRITE,
+    HEDIT_EVENT_TYPE_FILE_CLOSE,
+    HEDIT_EVENT_TYPE_FILE_CHANGE
+} HEditEventType;
+
+
+
+#define HEDIT_EVENT_TOPIC_LOAD              "hedit/load"
+#define HEDIT_EVENT_TOPIC_QUIT              "hedit/quit"
+#define HEDIT_EVENT_TOPIC_MODE_SWITCH       "hedit/mode-switch"
+#define HEDIT_EVENT_TOPIC_VIEW_SWITCH       "hedit/view-switch"
+#define HEDIT_EVENT_TOPIC_FILE_OPEN         "hedit/file/open"
+#define HEDIT_EVENT_TOPIC_FILE_WRITE        "hedit/file/write"
+#define HEDIT_EVENT_TOPIC_FILE_CLOSE        "hedit/file/close"
+#define HEDIT_EVENT_TOPIC_FILE_CHANGE       "hedit/file/change"
+
+
+
+typedef struct HEditEvent {
+    HEdit* hedit;
+    HEditEventType type;
+} HEditEvent;
+
+
+
+typedef struct HEditModeEvent {
+    HEditEvent e;
+    Mode* old_mode;
+    Mode* new_mode;
+} HEditModeEvent;
+
+
+
+typedef struct HEditViewEvent {
+    HEditEvent e;
+    View* old_view;
+    View* new_view;
+} HEditViewEvent;
+
+
+
+typedef struct HEditFileEvent {
+    HEditEvent e;
+    File* file;
+} HEditFileEvent;
+
+
+
+typedef struct HEditFileChangeEvent {
+    HEditEvent e;
+    File* file;
+    size_t offset;
+    size_t len;
+} HEditFileChangeEvent;
 
 
 

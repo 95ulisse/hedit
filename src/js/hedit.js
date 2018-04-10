@@ -7,7 +7,6 @@
 // which acts as a bridge between the JS and the C worlds.
 
 import EventEmitter from 'hedit/private/eventemitter';
-import format from 'hedit/private/format';
 
 function parseHex(str) {
     const m = str.match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
@@ -347,40 +346,12 @@ class HEdit extends EventEmitter {
         __hedit.switchMode(name);
     }
 
-    /**
-     * Registers a new file format.
-     * @alias module:hedit.registerFormat
-     * @param {string} name - Name of the format. Must be unique.
-     * @param {object} [guess] - Hint for automatic selection of format on file open.
-     * @param {string} guess.extension - Use this format for the files matching this extension.
-     * @param {string} guess.magic - Use this format for the files starting with the given magic.
-     * @param {object} desc - Description of the file format.
-     * @throws Throws if the name of the format is not unique or if the format description
-     *         is invalid.
-     */
-    registerFormat(name, guess, desc) {
-        if (typeof desc === 'undefined' && typeof guess === 'object') {
-            desc = guess;
-            guess = null;
-        }
-        format.registerFormat(name, guess, desc);
-    }
-
 };
 
 const hedit = new HEdit();
 
-const events = {
-    'load': 'load',
-    'quit': 'quit',
-    'mode_switch': 'modeSwitch',
-    'view_switch': 'viewSwitch'
-};
-
 __hedit.registerEventBroker((name, ...args) => {
-    if (events[name]) {
-        hedit.emit(events[name], ...args);
-    }
+    hedit.emit(name.substring(6) /* Chop off `hedit/` from the name. */, ...args);
 });
 
 /**
@@ -395,14 +366,36 @@ __hedit.registerEventBroker((name, ...args) => {
 
 /**
  * Event raised when the user switches mode.
+ * @event mode-switch
  * @param {string} mode - New mode set.
- * @event modeSwitch
  */
 
 /**
  * Event raised when the user switches view.
+ * @event view-switch
  * @param {string} view - New active view.
- * @event viewSwitch
+ */
+ 
+/**
+ * Event raised when a new file is opened by the user.
+ * @event file/open
+ */
+
+/**
+ * Event raised when the file has been successfully written to disk.
+ * @event file/write
+ */
+ 
+/**
+ * Event raised when the open file is closed.
+ * @event file/close
+ */
+ 
+/**
+ * Event raised when the contents of the file change.
+ * @event file/change
+ * @param {integer} offset Offset of the change.
+ * @param {integer} len Length of the change.
  */
 
 export default hedit;

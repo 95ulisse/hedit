@@ -1,5 +1,5 @@
+import hedit from 'hedit';
 import file from 'hedit/file';
-import Format from 'hedit/format';
 import log from 'hedit/log';
 import IntervalTree from 'hedit/private/intervaltree';
 
@@ -37,9 +37,7 @@ class FileProxy {
 
     read(offset, len) {
         this._accessed.insert(offset, offset + len - 1);
-        const val = file.read(offset, len);
-        log.info(`Read caught: [${offset}, ${offset + len - 1}] => ${new Uint8Array(val)}`);
-        return val;
+        return file.read(offset, len);
     }
 
     hasRead(offset, len) {
@@ -147,7 +145,7 @@ class FormatCache {
 
 // When the contents of the file change, check if we need to invalidate the current format cache
 let currentFormatCache = null;
-file.on('change', (offset, len) => {
+hedit.on('file/change', (offset, len) => {
     if (currentFormatCache && currentFormatCache._fileProxy.hasRead(offset, len)) {
         currentFormatCache.invalidate();
         log.debug('Format cache invalidated.');
@@ -222,13 +220,7 @@ export default {
             return;
         }
 
-        let f = format();
-        if (!(f instanceof Format)) {
-            log.error('Formats must be an instance of the Format class.');
-            return;
-        }
-
-        currentFormatCache = new FormatCache(f);
+        currentFormatCache = new FormatCache(format());
         __hedit.file_setFormat(currentFormatCache);
     }
 
