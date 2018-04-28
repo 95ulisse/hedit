@@ -228,6 +228,15 @@ static void RegisterFormatGuessFunction(const FunctionCallbackInfo<v8::Value>& a
     format_guess_function = Global<Function>(isolate, Local<Function>::Cast(args[0]));
 }
 
+// __hedit.redraw()
+static void Redraw(const FunctionCallbackInfo<v8::Value>& args) {
+    Isolate* isolate = args.GetIsolate();
+    HandleScope handle_scope(isolate);
+    HEdit* hedit = (HEdit*) Local<External>::Cast(args.Data())->Value();
+
+    hedit_redraw_view(hedit);
+}
+
 // __hedit.log("file", line, severity, "contents");
 static void Log(const FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
@@ -1007,6 +1016,7 @@ bool hedit_js_init(HEdit* hedit) {
         SET("require", Require);
         SET("registerEventBroker", RegisterEventBroker);
         SET("registerFormatGuessFunction", RegisterFormatGuessFunction);
+        SET("redraw", Redraw);
         SET("log", Log);
         SET("setTheme", SetTheme);
         SET("mode", GetMode);

@@ -149,6 +149,7 @@ hedit.on('file/change', (offset, len) => {
     if (currentFormatCache && currentFormatCache._fileProxy.hasRead(offset, len)) {
         currentFormatCache.invalidate();
         log.debug('Format cache invalidated.');
+        __hedit.redraw();
     }
 });
 
