@@ -37,7 +37,8 @@ class FileProxy {
 
     read(offset, len) {
         this._accessed.insert(offset, offset + len - 1);
-        return file.read(offset, len);
+        const buf = file.read(offset, len);
+        return buf.byteLength < len ? null : buf;
     }
 
     hasRead(offset, len) {
@@ -103,7 +104,7 @@ class FormatCache {
             }.bind(this),
             
             seek: function (pos) {
-                
+            
                 // Do nothing if the iterator ended already
                 if (ended) {
                     return null;
@@ -137,8 +138,8 @@ class FormatCache {
                         
                     }
                 }
-                
-            }.bind(this)            
+
+            }.bind(this)
         };
     }
 }

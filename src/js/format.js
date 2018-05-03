@@ -288,7 +288,12 @@ function addCommonMethod(name, length, m, endianess) {
                 length,
                 id,
                 read(proxy, off) {
-                    return m.call(new DataView(proxy.read(off, length)), 0, true /* Little endian */);
+                    const buf = proxy.read(off, length);
+                    if (buf) {
+                        return m.call(new DataView(buf), 0, true /* Little endian */);
+                    } else {
+                        return null;
+                    }
                 }
             });
             return this;
@@ -300,7 +305,12 @@ function addCommonMethod(name, length, m, endianess) {
                 length,
                 id,
                 read(proxy, off) {
-                    return m.call(new DataView(proxy.read(off, length)), 0, false /* Big endian */);
+                    const buf = proxy.read(off, length);
+                    if (buf) {
+                        return m.call(new DataView(buf), 0, false /* Big endian */);
+                    } else {
+                        return null;
+                    }
                 }
             });
             return this;
@@ -319,7 +329,12 @@ function addCommonMethod(name, length, m, endianess) {
                 length,
                 id,
                 read(proxy, off) {
-                    return m.call(new DataView(proxy.read(off, length)), 0);
+                    const buf = proxy.read(off, length);
+                    if (buf) {
+                        return m.call(new DataView(buf), 0);
+                    } else {
+                        return null;
+                    }
                 }
             });
             return this;
