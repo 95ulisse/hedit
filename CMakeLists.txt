@@ -146,3 +146,13 @@ add_custom_target (
     COMMAND git push origin gh-pages || true
     COMMAND git checkout master
 )
+
+# Packaging for distribution
+add_custom_target (
+    dist
+    DEPENDS hedit
+    COMMAND cmake -E cmake_echo_color --cyan "Building source tarball..."
+    COMMAND cd "${PROJECT_SOURCE_DIR}" && git archive master --format=tar.gz -o "${PROJECT_BINARY_DIR}/hedit-${HEDIT_VERSION}-src.tar.gz"
+    COMMAND cmake -E cmake_echo_color --cyan "Compressing binary..."
+    COMMAND tar czf "hedit-${HEDIT_VERSION}-bin.tar.gz" hedit
+)
