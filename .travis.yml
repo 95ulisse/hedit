@@ -8,34 +8,40 @@ addons:
     packages:
     - gcc-6
     - g++-6
+    - dpkg
 
 script:
 
-  # Libtermkey and libunibilium packages from ubuntu Artful
-  - wget http://cz.archive.ubuntu.com/ubuntu/pool/universe/libt/libtermkey/libtermkey1_0.20-2_amd64.deb
-  - wget http://cz.archive.ubuntu.com/ubuntu/pool/universe/libt/libtermkey/libtermkey-dev_0.20-2_amd64.deb
-  - wget http://cz.archive.ubuntu.com/ubuntu/pool/universe/u/unibilium/libunibilium0_1.2.0-1_amd64.deb
-  - wget http://cz.archive.ubuntu.com/ubuntu/pool/universe/u/unibilium/libunibilium-dev_1.2.0-1_amd64.deb
-  - sudo dpkg -i libunibilium0_1.2.0-1_amd64.deb libtermkey1_0.20-2_amd64.deb libtermkey-dev_0.20-2_amd64.deb libunibilium-dev_1.2.0-1_amd64.deb
+  # Libtermkey and libunibilium packages from ubuntu Bionic
+  - wget http://mirrors.kernel.org/ubuntu/pool/universe/u/unibilium/libunibilium4_2.0.0-2_amd64.deb
+  - wget http://mirrors.kernel.org/ubuntu/pool/universe/u/unibilium/libunibilium-dev_2.0.0-2_amd64.deb
+  - wget http://mirrors.kernel.org/ubuntu/pool/universe/libt/libtermkey/libtermkey1_0.20-3_amd64.deb
+  - wget http://mirrors.kernel.org/ubuntu/pool/universe/libt/libtermkey/libtermkey-dev_0.20-3_amd64.deb
+  - sudo dpkg -i libunibilium4_2.0.0-2_amd64.deb libunibilium-dev_2.0.0-2_amd64.deb libtermkey1_0.20-3_amd64.deb libtermkey-dev_0.20-3_amd64.deb
 
   # Depot tools
   - if [ ! -e depot_tools/gclient ]; then git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git; fi
   - export PATH="$PATH:"`pwd`/depot_tools
 
   # Compilation
-  - mkdir build && cd build
+  - mkdir build && pushd build
   - CC=gcc-6 CXX=g++-6 cmake -DCMAKE_BUILD_TYPE=Release ..
   - make
 
   # Tests
   - make check
 
+  # Bundle
+  - make dist
+
+  - popd
+
 deploy:
   provider: releases
   api_key:
     secure: SW2r5Uv+dld/PFqkzcHihrX/wCjRKdolGKoO64xOuEoSoMk1UbeTVvakMPX8Nn45O88oOToAUf6Qy7PUxnvF0DGtYvGSSerlv5x8eaynNZyREBqIUdp0o37CavaumApgESelciTyQF99+cUoj86w4qGOcCuELO90P3kxcbwjZv2/RPgqkxyqvPPWHAexA/9h9K9hjkXYQTBG0Fd4fRFPwKKpEPuHDcRbldwllfz+jeeObs9xnqNmarCL999DMsXkJMy5Sc2urqYzWcTqWpB52R9Ip/e9N7JW3JLYeYEmFv+h9oHLeto8lv0weTR0Yauk5AlhCe7o0qhP+/Qx1Y/lZv+iC7hK7jNjbTXf1r9IJ7ZBHt8ZdyW/PFtcNqM/+i1/kKy0lHV+DnbXmtWJwtrtV2E43WrnkSXJR33u2UsQbBgk1D00Ql84DMOIaBeuFCoNHFlO0bmMoD79h4dtV8bJSJgKae+TMkM2npEhCsxn2ljd7Ew5FlDxkf4QOUKkZSNY1lWiFARqbhZHwixlU5iFjFMlMmPKDfRvt72cmAuVxmBd9YSSnTlYEm1FGnXqMH5ltZ9CeZ9zECw7TYNmA+wtpyapyiv4hUxU758N0BnjoedqxMhjNgwETOeftHW4fr22nDEAiED1kb+9eWi1dOp1gNLSP+h9/J1PXAeWDk1mGQo=
-  file: build/hedit-*.tar.gz
   file_glob: true
+  file: "build/*.tar.gz"
   skip_cleanup: true
   on:
     tags: true

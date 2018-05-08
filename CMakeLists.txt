@@ -24,7 +24,7 @@ set (CMAKE_CXX_FLAGS_DEBUG "-g -DDEBUG -fsanitize=address")
 set (CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 # Version number
-set (HEDIT_VERSION "0.1.0")
+set (HEDIT_VERSION "0.1")
 
 # Build options
 option (WITH_V8 "Enable JavaScript integration with V8." ON)
@@ -151,8 +151,6 @@ add_custom_target (
 add_custom_target (
     dist
     DEPENDS hedit
-    COMMAND cmake -E cmake_echo_color --cyan "Building source tarball..."
-    COMMAND cd "${PROJECT_SOURCE_DIR}" && git archive master --format=tar.gz -o "${PROJECT_BINARY_DIR}/hedit-${HEDIT_VERSION}-src.tar.gz"
     COMMAND cmake -E cmake_echo_color --cyan "Compressing binary..."
     COMMAND tar czf "hedit-${HEDIT_VERSION}-bin.tar.gz" hedit
 )
